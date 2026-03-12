@@ -105,7 +105,6 @@ document.addEventListener('DOMContentLoaded', function() {
     Object.entries(status).forEach(([client, rawStatus]) => {
       let clientElement = document.getElementById(`client-${client}`)
       if (!clientElement) {
-        // Render new row if generated out of scope
         window.location.reload()
       }
 

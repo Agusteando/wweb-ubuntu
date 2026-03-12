@@ -5,14 +5,12 @@ export default class BotServiceProvider {
 
   public register() {
     this.app.container.singleton('App/Services/BotService', () => {
-      // Dynamic require ensures it's lazily loaded
       const BotService = require('App/Services/BotService').default
       return BotService
     })
   }
 
   public async boot() {
-    // Initiate boot sequence
     this.app.container.use('App/Services/BotService')
   }
 

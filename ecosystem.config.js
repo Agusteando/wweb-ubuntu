@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'whatsapp-bot',
-      script: './server.js',
-      cwd: './build',
+      script: './build/server.js',
+      cwd: './',
       instances: 1,
       autorestart: true,
       watch: false,

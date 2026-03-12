@@ -50,7 +50,8 @@ class BotService {
   private clientsFile: string
 
   constructor() {
-    this.dataDir = Application.makePath('data')
+    // Stores JSON and auth files safely in the app root, surviving TS/JS builds
+    this.dataDir = Application.appRoot + '/data'
     this.clientsFile = path.join(this.dataDir, 'clients.json')
     this.init()
   }
@@ -134,7 +135,7 @@ class BotService {
     if (this.clients.has(clientId)) return
 
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId, dataPath: Application.makePath('data', '.wwebjs_auth') }),
+      authStrategy: new LocalAuth({ clientId, dataPath: path.join(this.dataDir, '.wwebjs_auth') }),
       puppeteer: {
         headless: true,
         args: [

@@ -1,0 +1,17 @@
+/*
+|--------------------------------------------------------------------------
+| Ace entry point
+|--------------------------------------------------------------------------
+|
+| The ace file is the entry point to run command line commands.
+|
+*/
+process.env.ADONIS_ACE_CWD = __dirname
+require('reflect-metadata')
+require('source-map-support').install({ handleUncaughtExceptions: false })
+
+const { Ignitor } = require('@adonisjs/core/build/standalone')
+
+new Ignitor(__dirname)
+  .ace()
+  .handle(process.argv.slice(2))
