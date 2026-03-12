@@ -3,7 +3,6 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 
-// Native dependency-free Queue implementation
 class TaskQueue {
   private queue: Array<() => Promise<void>> = []
   private isProcessing = false
@@ -25,7 +24,6 @@ class TaskQueue {
         } catch (err) {
           console.error('Error processing queue task:', err)
         }
-        // Throttle messages
         const delay = Math.floor(Math.random() * (2000 - 1000 + 1)) + 1000
         await new Promise((resolve) => setTimeout(resolve, delay))
       }
@@ -54,7 +52,6 @@ class BotService {
   constructor() {
     this.dataDir = Application.makePath('data')
     this.clientsFile = path.join(this.dataDir, 'clients.json')
-    
     this.init()
   }
 
@@ -75,8 +72,6 @@ class BotService {
     } catch (err: any) {
       if (err.code === 'ENOENT') {
         await fs.writeFile(this.clientsFile, JSON.stringify([]))
-      } else {
-        console.error('Failed to load clients:', err)
       }
     }
   }
@@ -99,7 +94,7 @@ class BotService {
     try {
       const files = await fs.readdir(COMMANDS_DIR)
       return files.filter(
-        (file) => (file.endsWith('.js') || file.endsWith('.ts')) && !file.startsWith('index') && !file.endsWith('.d.ts')
+        (file) => (file.endsWith('.js') || file.endsWith('.ts')) && !file.endsWith('.d.ts')
       )
     } catch (err) {
       return []
@@ -113,12 +108,10 @@ class BotService {
     
     if (commandFile) {
       const COMMANDS_DIR = path.join(__dirname, 'Commands')
-      // Strip extension to allow Node to resolve automatically for Dev (.ts) and Prod (.js)
-      const moduleName = commandFile.replace(/\.(ts|js)$/, '')
-      const commandPath = path.join(COMMANDS_DIR, moduleName)
+      const commandPath = path.join(COMMANDS_DIR, commandFile)
 
       try {
-        const { default: CommandClass } = await import(commandPath)
+        const { default: CommandClass } = require(commandPath)
         const actions = new CommandClass(this.clients.get(clientId))
         actions.fileName = commandFile
         this.commands.set(clientId, actions)
@@ -129,7 +122,6 @@ class BotService {
     } else {
       this.commands.delete(clientId)
     }
-    
     await this.saveClients()
   }
 
@@ -237,5 +229,4 @@ class BotService {
   }
 }
 
-// Export the instance (singleton mapped)
 export default new BotService()

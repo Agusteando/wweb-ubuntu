@@ -8,9 +8,8 @@ export default class BotController {
     if (!clientId || clientId.trim() === '') {
       clientId = uuidv4()
     }
-    
     BotService.addClient(clientId)
-    return response.redirect().back()
+    return response.redirect().toPath('/')
   }
 
   public async setCommand({ request, response }: HttpContextContract) {
@@ -28,7 +27,7 @@ export default class BotController {
   public async remove({ request, response }: HttpContextContract) {
     const clientId = request.input('clientId')
     await BotService.removeClient(clientId)
-    return response.redirect().back()
+    return response.redirect().toPath('/')
   }
 
   public async sendMessage({ request, response, params }: HttpContextContract) {

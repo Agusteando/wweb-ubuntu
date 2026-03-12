@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WhatsApp Bot Manager</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/whatsapp-manager/resources/js/bot.js" defer></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #eceff1; padding: 20px; color: #263238; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 30px; }
+    h1 { font-size: 2.5em; color: #37474f; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .form-group { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 15px; align-items: center; margin-bottom: 30px; }
+    input[type="text"] { flex: 1; padding: 12px; border: none; border-radius: 8px; background: #f5f6fa; font-size: 1em; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s; }
+    input[type="text"]:focus { outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(9, 132, 227, 0.3); }
+    button { padding: 12px 25px; background: #0984e3; color: white; border: none; border-radius: 8px; font-size: 1em; cursor: pointer; box-shadow: 0 4px 10px rgba(9, 132, 227, 0.3); transition: all 0.3s; }
+    button:hover:not(:disabled) { background: #0652dd; box-shadow: 0 6px 15px rgba(9, 132, 227, 0.4); transform: translateY(-2px); }
+    button:disabled { background: #b0bec3; cursor: not-allowed; box-shadow: none; }
+    select { padding: 10px; border-radius: 8px; background: #f5f6fa; border: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; }
+    .client-list { display: grid; gap: 20px; }
+    .client { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-wrap: wrap; align-items: center; gap: 20px; transition: all 0.3s; }
+    .client:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.15); transform: translateY(-3px); }
+    .client strong { color: #0984e3; font-size: 1.2em; flex: 1; }
+    .status { padding: 8px 15px; border-radius: 20px; font-size: 0.9em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .status.awaiting-qr { background: #ffca28; color: #fff; }
+    .status.qr-received { background: #00acc1; color: #fff; }
+    .status.connected { background: #00c853; color: #fff; }
+    .status.error { background: #e53935; color: #fff; }
+    .qr-canvas { width: 160px; height: 160px; display: flex; justify-content: center; align-items: center; background: #f5f6fa; border-radius: 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); }
+    .spinner { width: 30px; height: 30px; border: 4px solid #dfe6e9; border-top: 4px solid #0984e3; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .remove-btn { background: #e53935; box-shadow: 0 4px 10px rgba(229, 57, 53, 0.3); }
+    .remove-btn:hover:not(:disabled) { background: #c62828; box-shadow: 0 6px 15px rgba(229, 57, 53, 0.4); }
+    .actions-toggle { background: #607d8b; color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 0.9em; box-shadow: 0 4px 10px rgba(96, 125, 139, 0.3); }
+    .actions-toggle:hover { background: #455a64; box-shadow: 0 6px 15px rgba(69, 90, 100, 0.4); }
+    .actions-panel { display: none; width: 100%; padding: 15px; background: #fafafa; border-radius: 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); margin-top: 10px; }
+    .actions-panel.active { display: block; }
+    .send-message-form { display: flex; gap: 10px; align-items: center; }
+    .send-message-form input[type="text"] { flex: 1; padding: 10px; }
+    .send-message-form button { background: #4caf50; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3); }
+    .send-message-form button:hover:not(:disabled) { background: #388e3c; box-shadow: 0 6px 15px rgba(56, 142, 60, 0.4); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>WhatsApp Bot Manager</h1>
+    </header>
+
+    <div class="form-group">
+      <form id="add-client-form" action="/whatsapp-manager/bot/add" method="POST">
+        <input type="text" name="clientId" placeholder="Enter Client ID (optional)" />
+        <button type="submit" id="add-btn">Add Client</button>
+      </form>
+      <button id="generate-btn">Generate ID</button>
+    </div>
+
+    <div class="client-list" id="client-list">
+      @if(!clients || clients.length === 0)
+        <p style="text-align: center; color: #607d8b;">No clients added yet. Start by adding one above!</p>
+      @else
+        @each(client in clients)
+          <div class="client fade-in" id="client-{{ client.clientId }}">
+            <strong>{{ client.clientId }}</strong>
+            <span class="status {{ client.status.toLowerCase().replace(' ', '-') }}">{{ client.status }}</span>
+            <div class="qr-canvas" id="qr-{{ client.clientId }}"><div class="spinner"></div></div>
+            <form class="set-command-form" data-client-id="{{ client.clientId }}" style="display: inline;">
+              <input type="hidden" name="clientId" value="{{ client.clientId }}" />
+              <select name="commandFile">
+                <option value="">No Command</option>
+                @each(file in commandFiles)
+                  <option value="{{ file }}" {{ client.commandFile === file ? 'selected' : '' }}>{{ file }}</option>
+                @endeach
+              </select>
+            </form>
+            <form action="/whatsapp-manager/bot/remove" method="POST" style="display: inline;">
+              <input type="hidden" name="clientId" value="{{ client.clientId }}" />
+              <button type="submit" class="remove-btn">Remove</button>
+            </form>
+            <button class="actions-toggle" onclick="toggleActions('{{ client.clientId }}')">Actions</button>
+            <div class="actions-panel" id="actions-{{ client.clientId }}">
+              <form class="send-message-form" data-client-id="{{ client.clientId }}">
+                <input type="text" name="chatId" placeholder="Chat ID (e.g., 1234567890@c.us)" />
+                <input type="text" name="message" placeholder="Message" />
+                <button type="submit">Send Message</button>
+              </form>
+            </div>
+          </div>
+        @endeach
+      @endif
+    </div>
+  </div>
+</body>
+</html>

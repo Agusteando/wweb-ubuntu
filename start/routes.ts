@@ -8,7 +8,6 @@ Route.get('/', async ({ view }) => {
     if (BotService.qrCodes.get(clientId)) displayStatus = 'QR Received'
     else if (status === 'ready') displayStatus = 'Connected'
     else if (status === 'error') displayStatus = 'Error'
-    
     return {
       clientId,
       status: displayStatus,
@@ -20,13 +19,13 @@ Route.get('/', async ({ view }) => {
   return view.render('bot', { clients: clientsData, commandFiles })
 })
 
-Route.get('/resources/js/bot.js', ({ response }) => {
-  const filePath = Application.resourcesPath('js', 'bot.js')
+Route.get('/whatsapp-manager/resources/js/bot.js', ({ response }) => {
+  const filePath = Application.resourcesPath('js/bot.js')
   return response.attachment(filePath)
 })
 
-Route.post('/bot/add', 'BotController.add')
-Route.post('/bot/set-command', 'BotController.setCommand')
-Route.post('/bot/remove', 'BotController.remove')
-Route.get('/bot/qr', 'BotController.qr')
-Route.post('/bot/send/:clientId', 'BotController.sendMessage')
+Route.post('/whatsapp-manager/bot/add', 'BotController.add')
+Route.post('/whatsapp-manager/bot/set-command', 'BotController.setCommand')
+Route.post('/whatsapp-manager/bot/remove', 'BotController.remove')
+Route.get('/whatsapp-manager/bot/qr', 'BotController.qr')
+Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessage')

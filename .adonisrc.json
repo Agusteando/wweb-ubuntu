@@ -1,11 +1,9 @@
 {
   "typescript": true,
   "commands": [
-    "./commands",
     "@adonisjs/core/build/commands/index.js",
     "@adonisjs/repl/build/commands"
   ],
-  "exceptionHandlerNamespace": "App/Exceptions/Handler",
   "aliases": {
     "App": "app",
     "Config": "config",
@@ -17,5 +15,15 @@
     "@adonisjs/view",
     "./providers/BotServiceProvider"
   ],
-  "aceProviders": ["@adonisjs/repl"]
+  "aceProviders": ["@adonisjs/repl"],
+  "metaFiles": [
+    {
+      "pattern": "resources/views/**/*.edge",
+      "reloadServer": false
+    },
+    {
+      "pattern": "resources/js/**/*.js",
+      "reloadServer": false
+    }
+  ]
 }
