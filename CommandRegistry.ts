@@ -17,6 +17,7 @@ class CommandRegistry {
 
   public async loadCommands() {
     this.commands.clear()
+    
     const commandsDir = path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
     
     try {
@@ -27,7 +28,6 @@ class CommandRegistry {
         if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
           const commandPath = path.join(commandsDir, file)
           
-          // Clear require cache for hot-reloading
           delete require.cache[require.resolve(commandPath)]
           
           const imported = require(commandPath)
@@ -50,14 +50,11 @@ class CommandRegistry {
   public async execute(message: Message, client: Client) {
     const session = SessionManager.getOrCreate(message.from)
     
-    // 1. Run Automations (Audio transcription, PDF conversions, etc.)
     await Automations.run(message, client, session)
 
     const body = message.body || ''
     
-    // 2. Handle interactive/waiting states (e.g. DP selection)
     if (session.waiting && session.cmd === 'DP_SELECTION' && !isNaN(Number(body.trim()))) {
-      // Defer to DP logic (handled within the DP command or a separate handler)
       const DpCommand = this.commands.get('!dp')
       if (DpCommand) await DpCommand.handle(message, body.trim().split(' '), client, session)
       return

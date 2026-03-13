@@ -1,12 +1,11 @@
 import type { ApplicationContract } from '@ioc:Adonis/Core/Application'
+import BotService from '../app/Services/BotService'
 
 export default class BotServiceProvider {
   constructor(protected app: ApplicationContract) {}
 
   public register() {
     this.app.container.singleton('App/Services/BotService', () => {
-      // Lazy load strictly using relative path to force the TS compiler hook
-      const BotService = require('../app/Services/BotService').default
       return new BotService()
     })
   }
