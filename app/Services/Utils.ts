@@ -16,7 +16,6 @@ export async function getGoogleAdminAuth(scopes: string[]) {
   return client
 }
 
-// Stubs for automations you need
 export async function convertPdfToWord(media: any, message: any) { 
   console.log('Mocking PDF to Word Convert:', media.filename)
   return false 
@@ -27,12 +26,10 @@ export async function convertWordToPdf(media: any, message: any) {
 }
 
 export async function createAudioPrediction2(message: any) {
-  // Mock Whisper API transcription implementation
   return { transcription: "Transcripción de prueba generada", audioFilePath: null, detectedLanguage: "es" }
 }
 
 export async function sendEmail(data: any) {
-  // Mock SendEmail (using Nodemailer usually)
   console.log('Sending Email:', data)
   return { status: 200 }
 }

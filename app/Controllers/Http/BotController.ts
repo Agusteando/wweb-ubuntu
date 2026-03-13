@@ -27,7 +27,6 @@ export default class BotController {
     }
   }
 
-  // Handle cross-platform API Request for sending complex attachments
   public async sendMedia({ request, response, params }: HttpContextContract) {
     const { chatId, caption, mediaType, source, mimeType, filename } = request.all()
     try {

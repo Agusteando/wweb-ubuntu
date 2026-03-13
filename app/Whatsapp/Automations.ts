@@ -1,6 +1,6 @@
 import { Message, Client } from 'whatsapp-web.js'
-import { UserSession } from '../Services/SessionManager'
-import { convertPdfToWord, convertWordToPdf, createAudioPrediction2 } from '../Services/Utils'
+import type { UserSession } from 'App/Services/SessionManager'
+import { convertPdfToWord, convertWordToPdf, createAudioPrediction2 } from 'App/Services/Utils'
 import fs from 'fs'
 
 export default class Automations {
@@ -11,7 +11,6 @@ export default class Automations {
         if (!media) return
         const mimeType = media.mimetype
 
-        // Automations for Specific Remote ID (PDF / Word)
         if (message.id.remote === '5217221495782@c.us') {
           if (mimeType === 'application/pdf') {
             const convertedToWord = await convertPdfToWord(media, message)
@@ -19,7 +18,6 @@ export default class Automations {
           }
         }
 
-        // Auto-Store Logic
         if (mimeType === 'application/pdf') {
           if (session.autoStorePDF) {
             session.adjuntados.push(media)
@@ -34,7 +32,6 @@ export default class Automations {
       }
     }
 
-    // Audio Transcription
     const allowedGroups = ['120363025945746778@g.us', '120363164004982656@g.us']
     if ((allowedGroups.includes(message.id.remote) || !message.id.remote.includes('@g.us')) 
         && message.hasMedia && !session.skip && (message.type === 'ptt' || message.type === 'audio')) {

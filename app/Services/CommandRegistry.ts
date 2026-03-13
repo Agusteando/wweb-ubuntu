@@ -1,0 +1,81 @@
+import { Client, Message } from 'whatsapp-web.js'
+import { promises as fs } from 'fs'
+import path from 'path'
+import Application from '@ioc:Adonis/Core/Application'
+import SessionManager, { UserSession } from 'App/Services/SessionManager'
+import Automations from 'App/Whatsapp/Automations'
+
+export interface CommandContract {
+  name: string
+  aliases?: string[]
+  description?: string
+  handle: (message: Message, args: string[], client: Client, session: UserSession) => Promise<void>
+}
+
+class CommandRegistry {
+  public commands: Map<string, CommandContract> = new Map()
+
+  public async loadCommands() {
+    this.commands.clear()
+    
+    // Explicit lowercase 'app' for Linux compatibility 
+    const commandsDir = path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
+    
+    try {
+      await fs.mkdir(commandsDir, { recursive: true })
+      const files = await fs.readdir(commandsDir)
+      
+      for (const file of files) {
+        if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
+          const commandPath = path.join(commandsDir, file)
+          
+          delete require.cache[require.resolve(commandPath)]
+          
+          const imported = require(commandPath)
+          const command: CommandContract = imported.default || imported
+          
+          if (command && command.name && typeof command.handle === 'function') {
+            this.commands.set(command.name.toLowerCase(), command)
+            if (command.aliases) {
+              command.aliases.forEach(alias => this.commands.set(alias.toLowerCase(), command))
+            }
+          }
+        }
+      }
+      console.log(`Loaded ${new Set(this.commands.values()).size} WhatsApp commands.`)
+    } catch (err) {
+      console.error('Failed to load commands:', err)
+    }
+  }
+
+  public async execute(message: Message, client: Client) {
+    const session = SessionManager.getOrCreate(message.from)
+    
+    await Automations.run(message, client, session)
+
+    const body = message.body || ''
+    
+    if (session.waiting && session.cmd === 'DP_SELECTION' && !isNaN(Number(body.trim()))) {
+      const DpCommand = this.commands.get('!dp')
+      if (DpCommand) await DpCommand.handle(message, body.trim().split(' '), client, session)
+      return
+    }
+
+    if (!body.startsWith('!')) return
+
+    const args = body.split(/\s+/)
+    const cmdName = args[0].toLowerCase()
+
+    const command = this.commands.get(cmdName)
+    if (command) {
+      try {
+        await command.handle(message, args, client, session)
+      } catch (err) {
+        console.error(`Error executing ${cmdName}:`, err)
+        await message.reply(`❌ Error executing command: ${err.message}`)
+      }
+    }
+  }
+}
+
+export default new CommandRegistry()
