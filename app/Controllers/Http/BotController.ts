@@ -14,14 +14,12 @@ export default class BotController {
       return {
         clientId,
         status: this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR')),
-        commandFile: config?.commandFile || ''
+        commandFiles: config?.commandFiles || []
       }
     })
     
-    // Makes plug-and-play UI command assigning possible dynamically
     const commandFiles = CommandRegistry.getAvailableFiles()
-    
-    return view.render('bot', { clients: clientsData, commandFiles })
+    return view.render('bot', { clients: clientsData, commandFiles, commandFilesJson: JSON.stringify(commandFiles) })
   }
 
   public async add({ request, response }: HttpContextContract) {
@@ -35,13 +33,50 @@ export default class BotController {
     return response.redirect().toPath('/')
   }
 
-  public async setCommand({ request, response }: HttpContextContract) {
+  public async setCommands({ request, response }: HttpContextContract) {
     const clientId = request.input('clientId')
-    const commandFile = request.input('commandFile')
-    await this.botService.setCommand(clientId, commandFile)
+    const commandFiles = request.input('commandFiles', [])
+    await this.botService.setCommands(clientId, Array.isArray(commandFiles) ? commandFiles : [commandFiles])
     return response.json({ success: true })
   }
 
+  // --- Editor Endpoints ---
+  public async getEditorFiles({ response }: HttpContextContract) {
+    return response.json({ files: CommandRegistry.getAvailableFiles() })
+  }
+
+  public async getEditorFileContent({ params, response }: HttpContextContract) {
+    try {
+      const content = await CommandRegistry.getFileContent(params.name)
+      return response.json({ success: true, content })
+    } catch (e) {
+      return response.status(404).json({ success: false, error: 'File not found' })
+    }
+  }
+
+  public async saveEditorFile({ request, response }: HttpContextContract) {
+    try {
+      const { filename, content } = request.all()
+      await CommandRegistry.saveFileContent(filename, content)
+      return response.json({ success: true })
+    } catch (e) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async createEditorFile({ request, response }: HttpContextContract) {
+    try {
+      const { filename } = request.all()
+      const safeName = filename.endsWith('.ts') ? filename : `${filename}.ts`
+      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewCommand {\n  async handle(message: Message, client: Client, session: UserSession) {\n    // Write your automation logic here\n  }\n}`
+      await CommandRegistry.saveFileContent(safeName, template)
+      return response.json({ success: true, filename: safeName })
+    } catch (e) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  // --- Messaging Endpoints ---
   public async sendMessage({ request, response, params }: HttpContextContract) {
     try {
       const result = await this.botService.sendMessage(params.clientId, request.input('chatId'), request.input('message'))

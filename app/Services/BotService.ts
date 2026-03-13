@@ -7,7 +7,7 @@ import axios from 'axios'
 
 export interface ClientConfig {
   clientId: string;
-  commandFile: string | null;
+  commandFiles: string[];
 }
 
 export default class BotService {
@@ -32,8 +32,16 @@ export default class BotService {
       const data = await fs.readFile(this.registryFile, 'utf-8')
       const parsed = JSON.parse(data)
       for (const [clientId, config] of Object.entries(parsed)) {
-        this.configs.set(clientId, config as ClientConfig)
-        this.addClient(clientId, false) // Rehydrate client without overwriting the registry state
+        // Upgrade legacy singular command configs to array
+        const rehydratedConfig = config as any
+        if (typeof rehydratedConfig.commandFile !== 'undefined') {
+          rehydratedConfig.commandFiles = rehydratedConfig.commandFile ? [rehydratedConfig.commandFile] : []
+          delete rehydratedConfig.commandFile
+        }
+        if (!rehydratedConfig.commandFiles) rehydratedConfig.commandFiles = []
+
+        this.configs.set(clientId, rehydratedConfig as ClientConfig)
+        this.addClient(clientId, false)
       }
     } catch (e) {
       // First run: Registry does not exist yet. No action needed.
@@ -54,7 +62,7 @@ export default class BotService {
     if (this.clients.has(clientId)) return
 
     if (saveToRegistry && !this.configs.has(clientId)) {
-      this.configs.set(clientId, { clientId, commandFile: null })
+      this.configs.set(clientId, { clientId, commandFiles: [] })
       this.saveRegistry()
     }
 
@@ -75,7 +83,6 @@ export default class BotService {
     client.on('auth_failure', () => this.statuses.set(clientId, 'error'))
     client.on('disconnected', () => { this.statuses.set(clientId, 'pending'); client.initialize() })
 
-    // Route messages to specific bot handler if assigned
     client.on('message', async (msg) => { 
       if (!msg.fromMe) await this.handleMessage(clientId, msg, client) 
     })
@@ -91,13 +98,14 @@ export default class BotService {
 
   private async handleMessage(clientId: string, msg: Message, client: Client) {
     const config = this.configs.get(clientId)
-    await CommandRegistry.execute(config?.commandFile || null, msg, client)
+    const commandsToRun = config?.commandFiles || []
+    await CommandRegistry.execute(commandsToRun, msg, client)
   }
 
-  public async setCommand(clientId: string, commandFile: string) {
+  public async setCommands(clientId: string, commandFiles: string[]) {
     const config = this.configs.get(clientId)
     if (config) {
-      config.commandFile = commandFile || null
+      config.commandFiles = commandFiles || []
       await this.saveRegistry()
     }
   }
@@ -148,7 +156,6 @@ export default class BotService {
     this.configs.delete(clientId)
     await this.saveRegistry()
     
-    // Purge session completely
     try {
       await fs.rm(path.join(this.dataDir, '.wwebjs_auth', `session-${clientId}`), { recursive: true, force: true })
     } catch (e) {}

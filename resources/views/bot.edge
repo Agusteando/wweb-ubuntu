@@ -1,96 +1,186 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>WhatsApp Bot Manager</title>
+  <meta charset="UTF-8">
+  <title>WhatsApp Bot & Automation Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Monaco Editor Loader -->
+  <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } };</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
+  
+  <!-- Global Data -->
+  <script>
+    window.GLOBAL_COMMAND_FILES = {{{ commandFilesJson || '[]' }}};
+  </script>
   <script src="/whatsapp-manager/resources/js/bot.js" defer></script>
+  
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: #eceff1; padding: 20px; color: #263238; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    header { text-align: center; margin-bottom: 30px; }
-    h1 { font-size: 2.5em; color: #37474f; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .form-group { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 15px; align-items: center; margin-bottom: 30px; }
-    input[type="text"] { flex: 1; padding: 12px; border: none; border-radius: 8px; background: #f5f6fa; font-size: 1em; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); transition: all 0.3s; }
-    input[type="text"]:focus { outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(9, 132, 227, 0.3); }
-    button { padding: 12px 25px; background: #0984e3; color: white; border: none; border-radius: 8px; font-size: 1em; cursor: pointer; box-shadow: 0 4px 10px rgba(9, 132, 227, 0.3); transition: all 0.3s; }
-    button:hover:not(:disabled) { background: #0652dd; box-shadow: 0 6px 15px rgba(9, 132, 227, 0.4); transform: translateY(-2px); }
-    button:disabled { background: #b0bec3; cursor: not-allowed; box-shadow: none; }
-    select { padding: 10px; border-radius: 8px; background: #f5f6fa; border: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; }
-    .client-list { display: grid; gap: 20px; }
-    .client { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; flex-wrap: wrap; align-items: center; gap: 20px; transition: all 0.3s; }
-    .client:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.15); transform: translateY(-3px); }
-    .client strong { color: #0984e3; font-size: 1.2em; flex: 1; }
-    .status { padding: 8px 15px; border-radius: 20px; font-size: 0.9em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .status.awaiting-qr { background: #ffca28; color: #fff; }
-    .status.qr-received { background: #00acc1; color: #fff; }
-    .status.connected { background: #00c853; color: #fff; }
-    .status.error { background: #e53935; color: #fff; }
-    .qr-canvas { width: 160px; height: 160px; display: flex; justify-content: center; align-items: center; background: #f5f6fa; border-radius: 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); }
-    .spinner { width: 30px; height: 30px; border: 4px solid #dfe6e9; border-top: 4px solid #0984e3; border-radius: 50%; animation: spin 1s linear infinite; }
+    .spinner { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid #fff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .fade-in { animation: fadeIn 0.5s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .remove-btn { background: #e53935; box-shadow: 0 4px 10px rgba(229, 57, 53, 0.3); }
-    .remove-btn:hover:not(:disabled) { background: #c62828; box-shadow: 0 6px 15px rgba(229, 57, 53, 0.4); }
-    .actions-toggle { background: #607d8b; color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 0.9em; box-shadow: 0 4px 10px rgba(96, 125, 139, 0.3); }
-    .actions-toggle:hover { background: #455a64; box-shadow: 0 6px 15px rgba(69, 90, 100, 0.4); }
-    .actions-panel { display: none; width: 100%; padding: 15px; background: #fafafa; border-radius: 8px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); margin-top: 10px; }
-    .actions-panel.active { display: block; }
-    .send-message-form { display: flex; gap: 10px; align-items: center; }
-    .send-message-form input[type="text"] { flex: 1; padding: 10px; }
-    .send-message-form button { background: #4caf50; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3); }
-    .send-message-form button:hover:not(:disabled) { background: #388e3c; box-shadow: 0 6px 15px rgba(56, 142, 60, 0.4); }
+    .monaco-editor-container { height: calc(100vh - 250px); min-height: 500px; }
+    [x-cloak] { display: none !important; }
   </style>
 </head>
-<body>
-  <div class="container">
-    <header>
-      <h1>WhatsApp Bot Manager</h1>
-    </header>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
 
-    <div class="form-group">
-      <form id="add-client-form" action="/whatsapp-manager/bot/add" method="POST">
-        <input type="text" name="clientId" placeholder="Enter Client ID (optional)" />
-        <button type="submit" id="add-btn">Add Client</button>
+  <!-- Navigation Bar -->
+  <nav class="bg-indigo-600 shadow-lg text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center space-x-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+          <span class="font-bold text-xl tracking-tight">WhatsApp Orchestrator</span>
+        </div>
+        <div class="flex items-center space-x-1">
+          <button id="tab-clients-btn" class="px-4 py-2 rounded-md font-medium text-sm bg-indigo-700 text-white transition-colors" onclick="switchTab('clients')">Bot Manager</button>
+          <button id="tab-editor-btn" class="px-4 py-2 rounded-md font-medium text-sm text-indigo-100 hover:bg-indigo-500 transition-colors" onclick="switchTab('editor')">Code Editor</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- TAB: Clients Manager -->
+  <main id="tab-clients" class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    
+    <!-- Add Client Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-800">Add New Instance</h2>
+        <p class="text-sm text-slate-500">Create a new WhatsApp client session.</p>
+      </div>
+      <form id="add-client-form" action="/whatsapp-manager/bot/add" method="POST" class="flex gap-3 w-full sm:w-auto">
+        <input type="text" name="clientId" placeholder="Optional Custom ID" class="flex-grow sm:w-64 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow" />
+        <button type="submit" id="add-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors">Create</button>
       </form>
-      <button id="generate-btn">Generate ID</button>
     </div>
 
-    <div class="client-list" id="client-list">
+    <!-- Clients Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="client-list">
       @if(!clients || clients.length === 0)
-        <p style="text-align: center; color: #607d8b;">No clients added yet. Start by adding one above!</p>
+        <div class="col-span-full text-center py-12">
+          <p class="text-slate-500 text-lg">No clients actively managed. Start by adding one above.</p>
+        </div>
       @else
         @each(client in clients)
-          <div class="client fade-in" id="client-{{ client.clientId }}">
-            <strong>{{ client.clientId }}</strong>
-            <span class="status {{ client.status.toLowerCase().replace(' ', '-') }}">{{ client.status }}</span>
-            <div class="qr-canvas" id="qr-{{ client.clientId }}"><div class="spinner"></div></div>
-            <form class="set-command-form" data-client-id="{{ client.clientId }}" style="display: inline;">
-              <input type="hidden" name="clientId" value="{{ client.clientId }}" />
-              <select name="commandFile">
-                <option value="">No Command</option>
-                @each(file in commandFiles)
-                  <option value="{{ file }}" {{ client.commandFile === file ? 'selected' : '' }}>{{ file }}</option>
-                @endeach
-              </select>
-            </form>
-            <form action="/whatsapp-manager/bot/remove" method="POST" style="display: inline;">
-              <input type="hidden" name="clientId" value="{{ client.clientId }}" />
-              <button type="submit" class="remove-btn">Remove</button>
-            </form>
-            <button class="actions-toggle" onclick="toggleActions('{{ client.clientId }}')">Actions</button>
-            <div class="actions-panel" id="actions-{{ client.clientId }}">
-              <form class="send-message-form" data-client-id="{{ client.clientId }}">
-                <input type="text" name="chatId" placeholder="Chat ID (e.g., 1234567890@c.us)" />
-                <input type="text" name="message" placeholder="Message" />
-                <button type="submit">Send Message</button>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col" id="client-{{ client.clientId }}">
+            
+            <div class="p-5 flex-grow">
+              <div class="flex justify-between items-start mb-4">
+                <h3 class="font-bold text-xl text-slate-800 break-all">{{ client.clientId }}</h3>
+                <span class="client-status px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider 
+                  {{ client.status === 'Connected' ? 'bg-green-100 text-green-700' : (client.status === 'QR Received' ? 'bg-blue-100 text-blue-700' : (client.status === 'Error' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700')) }}">
+                  {{ client.status }}
+                </span>
+              </div>
+              
+              <div class="flex justify-center mb-4 bg-slate-50 rounded-lg p-4 h-48 border border-slate-100 relative items-center">
+                <div class="qr-canvas flex justify-center items-center w-full h-full" id="qr-{{ client.clientId }}">
+                  <div class="spinner border-indigo-500 border-top-transparent"></div>
+                </div>
+              </div>
+
+              <!-- Associated Commands Display -->
+              <div class="mb-2">
+                <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Assigned Automations</p>
+                <div class="flex flex-wrap gap-1" id="badges-{{ client.clientId }}">
+                  @if(client.commandFiles.length === 0)
+                    <span class="text-sm text-slate-400 italic">No automations assigned</span>
+                  @else
+                    @each(cmd in client.commandFiles)
+                      <span class="px-2 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-xs">{{ cmd }}</span>
+                    @endeach
+                  @endif
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 p-4 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <button onclick="openCommandsModal('{{ client.clientId }}', {{ JSON.stringify(client.commandFiles) }})" class="col-span-2 flex justify-center items-center py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg font-medium text-sm transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Manage Automations
+              </button>
+              <button onclick="toggleActions('{{ client.clientId }}')" class="py-2 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg font-medium text-sm transition-colors">Test Msg</button>
+              <form action="/whatsapp-manager/bot/remove" method="POST" class="w-full">
+                <input type="hidden" name="clientId" value="{{ client.clientId }}" />
+                <button type="submit" class="w-full py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg font-medium text-sm transition-colors">Remove</button>
               </form>
             </div>
+            
+            <!-- Send Message Panel (Hidden by default) -->
+            <div id="actions-{{ client.clientId }}" class="hidden p-4 bg-white border-t border-slate-200">
+              <form class="send-message-form flex flex-col gap-2" data-client-id="{{ client.clientId }}">
+                <input type="text" name="chatId" placeholder="Chat ID (e.g., 1234567890@c.us)" class="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500" />
+                <input type="text" name="message" placeholder="Message content" class="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-indigo-500" />
+                <button type="submit" class="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium text-sm transition-colors">Send Now</button>
+              </form>
+            </div>
+
           </div>
         @endeach
       @endif
     </div>
+  </main>
+
+  <!-- TAB: Code Editor -->
+  <main id="tab-editor" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex gap-6">
+    <!-- Sidebar -->
+    <aside class="w-64 flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
+      <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+        <h3 class="font-bold text-slate-700">Automations</h3>
+        <button onclick="createNewFile()" class="p-1 text-indigo-600 hover:bg-indigo-100 rounded" title="New Command File">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        </button>
+      </div>
+      <div class="flex-grow overflow-y-auto p-2" id="editor-file-list">
+        <!-- Dynamically populated files -->
+      </div>
+    </aside>
+
+    <!-- Editor Main Area -->
+    <section class="flex-grow flex flex-col bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+        <h3 class="font-mono text-sm font-semibold text-slate-600 flex items-center">
+          <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span id="current-file-name">Select a file</span>
+        </h3>
+        <button id="editor-save-btn" disabled class="px-4 py-1.5 bg-green-600 text-white rounded font-medium text-sm shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" onclick="saveCurrentFile()">
+          Save Code
+        </button>
+      </div>
+      <div id="monaco-container" class="flex-grow monaco-editor-container bg-slate-900"></div>
+    </section>
+  </main>
+
+  <!-- MODAL: Manage Commands -->
+  <div id="commands-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex justify-center items-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+      <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <h3 class="font-bold text-lg text-slate-800">Assign Automations</h3>
+        <button onclick="closeCommandsModal()" class="text-slate-400 hover:text-slate-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-slate-500 mb-4">Select which automation modules should listen to messages for client: <strong id="modal-client-id-display" class="text-indigo-600"></strong></p>
+        <form id="commands-form">
+          <input type="hidden" id="modal-client-id" name="clientId">
+          <div class="space-y-3 max-h-60 overflow-y-auto pr-2" id="modal-checkbox-list">
+            <!-- Checkboxes injected via JS -->
+          </div>
+          <div class="mt-6 flex justify-end gap-3">
+            <button type="button" onclick="closeCommandsModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-indigo-700">Save Assignments</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
+
 </body>
 </html>
