@@ -2,7 +2,7 @@ import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
-import CommandRegistry from './CommandRegistry'
+import CommandRegistry from 'App/Services/CommandRegistry'
 import axios from 'axios'
 
 export default class BotService {
@@ -43,7 +43,6 @@ export default class BotService {
     client.on('auth_failure', () => this.statuses.set(clientId, 'error'))
     client.on('disconnected', () => { this.statuses.set(clientId, 'pending'); client.initialize() })
 
-    // Execute Plug-and-Play Registry
     client.on('message', async (msg) => { if (!msg.fromMe) await CommandRegistry.execute(msg, client) })
     client.on('message_create', async (msg) => { if (msg.fromMe) await CommandRegistry.execute(msg, client) })
 
@@ -58,14 +57,12 @@ export default class BotService {
     return client.sendMessage(chatId, text)
   }
 
-  // --- NEW: MEDIA SENDING SUPPORT ---
   public async sendMedia(clientId: string, chatId: string, mediaType: 'url'|'path'|'base64', source: string, caption?: string, mimeType?: string, filename?: string) {
     const client = this.getOrCreateClient(clientId)
     let media: MessageMedia
 
     try {
       if (mediaType === 'url') {
-        // Use axios to fetch properly, as fromUrl can occasionally struggle with auth walls
         const response = await axios.get(source, { responseType: 'arraybuffer' })
         const b64data = Buffer.from(response.data, 'binary').toString('base64')
         const detectedMime = response.headers['content-type'] || mimeType || 'application/octet-stream'

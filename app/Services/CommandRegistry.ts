@@ -18,7 +18,7 @@ class CommandRegistry {
   public async loadCommands() {
     this.commands.clear()
     
-    // Explicit lowercase 'app' for Linux compatibility 
+    // Exact folder casing required for Linux ('app' lowercase, 'Whatsapp', 'Commands' capitalized)
     const commandsDir = path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
     
     try {

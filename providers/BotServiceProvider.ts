@@ -5,8 +5,8 @@ export default class BotServiceProvider {
 
   public register() {
     this.app.container.singleton('App/Services/BotService', () => {
-      // Lazy load exact path during singleton instantiation
-      const { default: BotService } = require('../app/Services/BotService')
+      // By using the App/ alias, we guarantee the Adonis TS compiler intercepts it properly on Ubuntu
+      const BotService = require('App/Services/BotService').default
       return new BotService()
     })
   }
