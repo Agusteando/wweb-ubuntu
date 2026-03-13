@@ -1,6 +1,6 @@
 import { Message, Client } from 'whatsapp-web.js'
-import type { UserSession } from 'App/Services/SessionManager'
-import { convertPdfToWord, convertWordToPdf, createAudioPrediction2 } from 'App/Services/Utils'
+import type { UserSession } from '../Services/SessionManager'
+import { convertPdfToWord, convertWordToPdf, createAudioPrediction2 } from '../Services/Utils'
 import fs from 'fs'
 
 export default class Automations {

@@ -1,6 +1,6 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
-import type BotService from 'App/Services/BotService'
+import type BotService from '../../Services/BotService'
 
 export default class BotController {
   private get botService(): BotService {

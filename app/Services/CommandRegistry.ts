@@ -2,8 +2,8 @@ import { Client, Message } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
-import SessionManager, { UserSession } from 'App/Services/SessionManager'
-import Automations from 'App/Whatsapp/Automations'
+import SessionManager, { UserSession } from './SessionManager'
+import Automations from '../Whatsapp/Automations'
 
 export interface CommandContract {
   name: string
@@ -18,7 +18,6 @@ class CommandRegistry {
   public async loadCommands() {
     this.commands.clear()
     
-    // Exact folder casing required for Linux ('app' lowercase, 'Whatsapp', 'Commands' capitalized)
     const commandsDir = path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
     
     try {
