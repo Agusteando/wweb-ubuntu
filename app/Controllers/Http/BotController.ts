@@ -19,7 +19,13 @@ export default class BotController {
     })
     
     const commandFiles = CommandRegistry.getAvailableFiles()
-    return view.render('bot', { clients: clientsData, commandFiles, commandFilesJson: JSON.stringify(commandFiles) })
+    
+    return view.render('bot', { 
+      clients: clientsData, 
+      commandFiles, 
+      // Safe JSON stringification for HTML data attribute mapping
+      commandFilesJson: JSON.stringify(commandFiles)
+    })
   }
 
   public async add({ request, response }: HttpContextContract) {
@@ -40,7 +46,6 @@ export default class BotController {
     return response.json({ success: true })
   }
 
-  // --- Editor Endpoints ---
   public async getEditorFiles({ response }: HttpContextContract) {
     return response.json({ files: CommandRegistry.getAvailableFiles() })
   }
@@ -76,7 +81,6 @@ export default class BotController {
     }
   }
 
-  // --- Messaging Endpoints ---
   public async sendMessage({ request, response, params }: HttpContextContract) {
     try {
       const result = await this.botService.sendMessage(params.clientId, request.input('chatId'), request.input('message'))

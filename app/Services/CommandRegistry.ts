@@ -22,7 +22,14 @@ class CommandRegistry {
       for (const file of files) {
         if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
           const commandPath = path.join(this.commandsDir, file)
-          delete require.cache[require.resolve(commandPath)]
+          
+          try {
+            // Un-cache the file explicitly to allow real-time code editor updates
+            const resolvedPath = require.resolve(commandPath)
+            if (require.cache[resolvedPath]) {
+              delete require.cache[resolvedPath]
+            }
+          } catch(e) {} // ignore if not cached yet
           
           const imported = require(commandPath)
           const handler = imported.default || imported
