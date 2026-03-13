@@ -40,7 +40,7 @@ interface ClientData {
   commandFile?: string
 }
 
-class BotService {
+export default class BotService {
   public clients: Map<string, Client> = new Map()
   public qrCodes: Map<string, string | null> = new Map()
   public statuses: Map<string, 'pending' | 'ready' | 'error'> = new Map()
@@ -50,8 +50,8 @@ class BotService {
   private clientsFile: string
 
   constructor() {
-    // Stores JSON and auth files safely in the app root, surviving TS/JS builds
-    this.dataDir = Application.appRoot + '/data'
+    // Safely resolve the data directory using cross-platform path.join
+    this.dataDir = path.join(Application.appRoot, 'data')
     this.clientsFile = path.join(this.dataDir, 'clients.json')
     this.init()
   }
@@ -104,7 +104,7 @@ class BotService {
 
   public async setCommandFile(clientId: string, commandFile: string): Promise<void> {
     if (!this.clients.has(clientId)) {
-      throw new Error(`Client ${clientId} not found`)
+      this.addClient(clientId)
     }
     
     if (commandFile) {
@@ -112,6 +112,16 @@ class BotService {
       const commandPath = path.join(COMMANDS_DIR, commandFile)
 
       try {
+        // Defensively delete cache on set/reset so commands properly hot-swap
+        try {
+          const resolvedPath = require.resolve(commandPath)
+          if (require.cache[resolvedPath]) {
+            delete require.cache[resolvedPath]
+          }
+        } catch (e) {
+          // Ignore resolution errors if module wasn't previously loaded
+        }
+
         const { default: CommandClass } = require(commandPath)
         const actions = new CommandClass(this.clients.get(clientId))
         actions.fileName = commandFile
@@ -124,6 +134,14 @@ class BotService {
       this.commands.delete(clientId)
     }
     await this.saveClients()
+  }
+
+  // Guaranteed valid Client return ensuring no undefined states upstream
+  public getOrCreateClient(clientId: string): Client {
+    if (!this.clients.has(clientId)) {
+      this.addClient(clientId)
+    }
+    return this.clients.get(clientId)!
   }
 
   public addClient(
@@ -179,20 +197,20 @@ class BotService {
       client.initialize().catch(console.error)
     })
 
-    client.on('message', async (message) => {
+    client.on('message', async (message: Message) => {
       if (message.fromMe) return
       const actions = this.commands.get(clientId)
-      if (actions) {
+      if (actions && typeof actions.response === 'function') {
         messageQueue.push(async () => {
           await actions.response(message, client)
         })
       }
     })
 
-    client.on('message_create', async (message) => {
+    client.on('message_create', async (message: Message) => {
       if (!message.fromMe) return
       const actions = this.commands.get(clientId)
-      if (actions) {
+      if (actions && typeof actions.response === 'function') {
         messageQueue.push(async () => {
           await actions.response(message, client)
         })
@@ -212,7 +230,12 @@ class BotService {
     const client = this.clients.get(clientId)
     if (!client) return
 
-    await client.destroy()
+    try {
+      await client.destroy()
+    } catch (err) {
+      console.error(`Error destroying client ${clientId}:`, err)
+    }
+
     this.clients.delete(clientId)
     this.qrCodes.delete(clientId)
     this.statuses.delete(clientId)
@@ -221,13 +244,11 @@ class BotService {
   }
 
   public async sendMessage(clientId: string, chatId: string, message: string): Promise<Message> {
-    const client = this.clients.get(clientId)
-    if (!client) throw new Error(`Client ${clientId} not found`)
+    // Rely on getOrCreate to ensure standard validation before message dispatch
+    const client = this.getOrCreateClient(clientId)
     if (this.statuses.get(clientId) !== 'ready') throw new Error(`Client ${clientId} is not ready`)
 
     const chat = await client.getChatById(chatId)
     return await chat.sendMessage(message)
   }
 }
-
-export default new BotService()

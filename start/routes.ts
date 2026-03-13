@@ -1,21 +1,24 @@
 import Route from '@ioc:Adonis/Core/Route'
-import BotService from '@ioc:App/Services/BotService'
 import Application from '@ioc:Adonis/Core/Application'
+import type BotService from 'App/Services/BotService'
 
 Route.get('/', async ({ view }) => {
-  const clientsData = Array.from(BotService.statuses.entries()).map(([clientId, status]) => {
+  // Resolve the singleton instance rather than calling off the uninstantiated class mapping
+  const botService = Application.container.use('App/Services/BotService') as BotService
+  
+  const clientsData = Array.from(botService.statuses.entries()).map(([clientId, status]) => {
     let displayStatus = 'Awaiting QR'
-    if (BotService.qrCodes.get(clientId)) displayStatus = 'QR Received'
+    if (botService.qrCodes.get(clientId)) displayStatus = 'QR Received'
     else if (status === 'ready') displayStatus = 'Connected'
     else if (status === 'error') displayStatus = 'Error'
     return {
       clientId,
       status: displayStatus,
-      commandFile: BotService.commands.get(clientId)?.fileName || ''
+      commandFile: botService.commands.get(clientId)?.fileName || ''
     }
   })
   
-  const commandFiles = await BotService.getCommandFiles()
+  const commandFiles = await botService.getCommandFiles()
   return view.render('bot', { clients: clientsData, commandFiles })
 })
 
