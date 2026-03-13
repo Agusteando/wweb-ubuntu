@@ -1,0 +1,29 @@
+import { Client, Message } from 'whatsapp-web.js'
+import { UserSession } from '../../Services/SessionManager'
+
+export default class ExampleCommand {
+  private client: Client
+
+  constructor(client: Client) {
+    this.client = client
+  }
+
+  async handle(message: Message, client: Client, session: UserSession) {
+    const body = message.body || " "
+    const cmd = body.split(" ")[0].toLowerCase()
+    const args = body.split(" ").filter(arg => arg.trim() !== '')
+
+    switch (cmd) {
+      case "!hello":
+        await message.reply("Hi there! I am your assigned multi-client bot.")
+        break
+      case "!echo":
+        const text = args.slice(1).join(" ")
+        await message.reply(text || "Say something!")
+        break
+      default:
+        // By default, do nothing and let other listeners or manual chats operate
+        break
+    }
+  }
+}

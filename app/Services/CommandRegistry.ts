@@ -2,22 +2,16 @@ import { Client, Message } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
-import SessionManager, { UserSession } from './SessionManager'
+import SessionManager from './SessionManager'
 import Automations from '../Whatsapp/Automations'
 
-export interface CommandContract {
-  name: string
-  aliases?: string[]
-  description?: string
-  handle: (message: Message, args: string[], client: Client, session: UserSession) => Promise<void>
-}
-
 class CommandRegistry {
-  public commands: Map<string, CommandContract> = new Map()
+  public handlers: Map<string, any> = new Map()
 
   public async loadCommands() {
-    this.commands.clear()
+    this.handlers.clear()
     
+    // Unifies bot definitions into ONE canonical logic directory
     const commandsDir = path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
     
     try {
@@ -28,50 +22,53 @@ class CommandRegistry {
         if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
           const commandPath = path.join(commandsDir, file)
           
+          // Allow hot-reloading capability
           delete require.cache[require.resolve(commandPath)]
           
           const imported = require(commandPath)
-          const command: CommandContract = imported.default || imported
+          const handler = imported.default || imported
           
-          if (command && command.name && typeof command.handle === 'function') {
-            this.commands.set(command.name.toLowerCase(), command)
-            if (command.aliases) {
-              command.aliases.forEach(alias => this.commands.set(alias.toLowerCase(), command))
-            }
+          if (handler) {
+            this.handlers.set(file, handler)
           }
         }
       }
-      console.log(`Loaded ${new Set(this.commands.values()).size} WhatsApp commands.`)
+      console.log(`Loaded ${this.handlers.size} WhatsApp command modules.`)
     } catch (err) {
-      console.error('Failed to load commands:', err)
+      console.error('Failed to load command modules:', err)
     }
   }
 
-  public async execute(message: Message, client: Client) {
+  public getAvailableFiles(): string[] {
+    return Array.from(this.handlers.keys())
+  }
+
+  public async execute(commandFile: string | null, message: Message, client: Client) {
     const session = SessionManager.getOrCreate(message.from)
     
+    // Always trigger global automations beforehand
     await Automations.run(message, client, session)
 
-    const body = message.body || ''
-    
-    if (session.waiting && session.cmd === 'DP_SELECTION' && !isNaN(Number(body.trim()))) {
-      const DpCommand = this.commands.get('!dp')
-      if (DpCommand) await DpCommand.handle(message, body.trim().split(' '), client, session)
-      return
-    }
+    if (!commandFile) return // The client doesn't have an automated handler attached
 
-    if (!body.startsWith('!')) return
-
-    const args = body.split(/\s+/)
-    const cmdName = args[0].toLowerCase()
-
-    const command = this.commands.get(cmdName)
-    if (command) {
+    const handlerClass = this.handlers.get(commandFile)
+    if (handlerClass) {
       try {
-        await command.handle(message, args, client, session)
+        // Broad compatibility wrapper (supports static, class instances, or legacy logic signatures)
+        if (typeof handlerClass.handle === 'function') {
+          await handlerClass.handle(message, client, session)
+        } else if (handlerClass.prototype && typeof handlerClass.prototype.handle === 'function') {
+          const instance = new handlerClass(client)
+          await instance.handle(message, client, session)
+        } else if (handlerClass.prototype && typeof handlerClass.prototype.response === 'function') {
+          const instance = new handlerClass(client)
+          await instance.response(message)
+        } else if (typeof handlerClass === 'function') {
+          await handlerClass(message, client, session)
+        }
       } catch (err) {
-        console.error(`Error executing ${cmdName}:`, err)
-        await message.reply(`❌ Error executing command: ${err.message}`)
+        console.error(`Error executing handler ${commandFile}:`, err)
+        await message.reply(`❌ Error executing bot module: ${err.message}`)
       }
     }
   }

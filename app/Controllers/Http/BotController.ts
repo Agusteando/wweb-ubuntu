@@ -1,10 +1,27 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import type BotService from '../../Services/BotService'
+import CommandRegistry from '../../Services/CommandRegistry'
 
 export default class BotController {
   private get botService(): BotService {
     return Application.container.use('App/Services/BotService') as BotService
+  }
+
+  public async index({ view }: HttpContextContract) {
+    const clientsData = Array.from(this.botService.statuses.entries()).map(([clientId, status]) => {
+      const config = this.botService.configs.get(clientId)
+      return {
+        clientId,
+        status: this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR')),
+        commandFile: config?.commandFile || ''
+      }
+    })
+    
+    // Makes plug-and-play UI command assigning possible dynamically
+    const commandFiles = CommandRegistry.getAvailableFiles()
+    
+    return view.render('bot', { clients: clientsData, commandFiles })
   }
 
   public async add({ request, response }: HttpContextContract) {
@@ -16,6 +33,13 @@ export default class BotController {
   public async remove({ request, response }: HttpContextContract) {
     await this.botService.removeClient(request.input('clientId'))
     return response.redirect().toPath('/')
+  }
+
+  public async setCommand({ request, response }: HttpContextContract) {
+    const clientId = request.input('clientId')
+    const commandFile = request.input('commandFile')
+    await this.botService.setCommand(clientId, commandFile)
+    return response.json({ success: true })
   }
 
   public async sendMessage({ request, response, params }: HttpContextContract) {

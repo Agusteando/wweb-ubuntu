@@ -5,20 +5,44 @@ import Application from '@ioc:Adonis/Core/Application'
 import CommandRegistry from './CommandRegistry'
 import axios from 'axios'
 
+export interface ClientConfig {
+  clientId: string;
+  commandFile: string | null;
+}
+
 export default class BotService {
   public clients: Map<string, Client> = new Map()
   public qrCodes: Map<string, string | null> = new Map()
   public statuses: Map<string, 'pending' | 'ready' | 'error'> = new Map()
+  public configs: Map<string, ClientConfig> = new Map()
+  
   private dataDir: string
+  private registryFile: string
 
   constructor() {
     this.dataDir = path.join(Application.appRoot, 'data')
-    this.init()
+    this.registryFile = path.join(this.dataDir, 'clients.json')
   }
 
-  private async init() {
+  public async init() {
     await fs.mkdir(this.dataDir, { recursive: true })
     await CommandRegistry.loadCommands()
+
+    try {
+      const data = await fs.readFile(this.registryFile, 'utf-8')
+      const parsed = JSON.parse(data)
+      for (const [clientId, config] of Object.entries(parsed)) {
+        this.configs.set(clientId, config as ClientConfig)
+        this.addClient(clientId, false) // Rehydrate client without overwriting the registry state
+      }
+    } catch (e) {
+      // First run: Registry does not exist yet. No action needed.
+    }
+  }
+
+  public async saveRegistry() {
+    const data = Object.fromEntries(this.configs)
+    await fs.writeFile(this.registryFile, JSON.stringify(data, null, 2), 'utf-8')
   }
 
   public getOrCreateClient(clientId: string): Client {
@@ -26,12 +50,20 @@ export default class BotService {
     return this.clients.get(clientId)!
   }
 
-  public addClient(clientId: string): void {
+  public addClient(clientId: string, saveToRegistry = true): void {
     if (this.clients.has(clientId)) return
+
+    if (saveToRegistry && !this.configs.has(clientId)) {
+      this.configs.set(clientId, { clientId, commandFile: null })
+      this.saveRegistry()
+    }
 
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: path.join(this.dataDir, '.wwebjs_auth') }),
-      puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+      puppeteer: { 
+        headless: true, 
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+      },
     })
 
     this.clients.set(clientId, client)
@@ -43,13 +75,31 @@ export default class BotService {
     client.on('auth_failure', () => this.statuses.set(clientId, 'error'))
     client.on('disconnected', () => { this.statuses.set(clientId, 'pending'); client.initialize() })
 
-    client.on('message', async (msg) => { if (!msg.fromMe) await CommandRegistry.execute(msg, client) })
-    client.on('message_create', async (msg) => { if (msg.fromMe) await CommandRegistry.execute(msg, client) })
+    // Route messages to specific bot handler if assigned
+    client.on('message', async (msg) => { 
+      if (!msg.fromMe) await this.handleMessage(clientId, msg, client) 
+    })
+    client.on('message_create', async (msg) => { 
+      if (msg.fromMe) await this.handleMessage(clientId, msg, client) 
+    })
 
     client.initialize().catch(err => {
       console.error(`Error initializing ${clientId}:`, err)
       this.statuses.set(clientId, 'error')
     })
+  }
+
+  private async handleMessage(clientId: string, msg: Message, client: Client) {
+    const config = this.configs.get(clientId)
+    await CommandRegistry.execute(config?.commandFile || null, msg, client)
+  }
+
+  public async setCommand(clientId: string, commandFile: string) {
+    const config = this.configs.get(clientId)
+    if (config) {
+      config.commandFile = commandFile || null
+      await this.saveRegistry()
+    }
   }
 
   public async sendMessage(clientId: string, chatId: string, text: string) {
@@ -92,7 +142,15 @@ export default class BotService {
       await client.destroy().catch(() => {})
       this.clients.delete(clientId)
     }
+    
     this.qrCodes.delete(clientId)
     this.statuses.delete(clientId)
+    this.configs.delete(clientId)
+    await this.saveRegistry()
+    
+    // Purge session completely
+    try {
+      await fs.rm(path.join(this.dataDir, '.wwebjs_auth', `session-${clientId}`), { recursive: true, force: true })
+    } catch (e) {}
   }
 }
