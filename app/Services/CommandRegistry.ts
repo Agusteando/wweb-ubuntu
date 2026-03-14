@@ -3,7 +3,6 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 import SessionManager from './SessionManager'
-import Automations from '../Whatsapp/Automations'
 
 class CommandRegistry {
   public handlers: Map<string, any> = new Map()
@@ -39,14 +38,37 @@ class CommandRegistry {
           }
         }
       }
-      console.log(`Loaded ${this.handlers.size} WhatsApp command modules.`)
+      console.log(`Loaded ${this.handlers.size} WhatsApp logic modules.`)
     } catch (err) {
-      console.error('Failed to load command modules:', err)
+      console.error('Failed to load logic modules:', err)
     }
   }
 
   public getAvailableFiles(): string[] {
     return Array.from(this.handlers.keys())
+  }
+
+  public getAvailableModules(): any[] {
+    const files = Array.from(this.handlers.keys())
+    return files.map(file => {
+      const handlerClass = this.handlers.get(file)
+      let instructions = 'No description provided.'
+      let type = 'Module'
+      
+      try {
+        const instance = (typeof handlerClass === 'function' && handlerClass.prototype) 
+          ? new handlerClass(null) 
+          : handlerClass;
+
+        if (handlerClass.instructions) instructions = handlerClass.instructions
+        else if (instance && instance.instructions) instructions = instance.instructions
+
+        if (handlerClass.type) type = handlerClass.type
+        else if (instance && instance.type) type = instance.type
+      } catch (e) {}
+
+      return { filename: file, instructions, type }
+    })
   }
 
   public async getFileContent(filename: string): Promise<string> {
@@ -65,9 +87,6 @@ class CommandRegistry {
   public async execute(commandFiles: string[], message: Message, client: Client) {
     const session = SessionManager.getOrCreate(message.from)
     
-    // Always trigger global automations beforehand
-    await Automations.run(message, client, session)
-
     if (!commandFiles || commandFiles.length === 0) return
 
     for (const commandFile of commandFiles) {
@@ -94,3 +113,6 @@ class CommandRegistry {
 }
 
 export default new CommandRegistry()
+
+import CommandRegistry from './app/Services/CommandRegistry'
+export default CommandRegistry

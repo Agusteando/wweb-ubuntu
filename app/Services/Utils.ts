@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
 import Application from '@ioc:Adonis/Core/Application'
+import axios from 'axios'
 
 export async function getGoogleAdminAuth(scopes: string[]) {
   const credPath = Env.get('GOOGLE_CREDENTIALS_PATH', 'credentials.json')
@@ -20,6 +21,7 @@ export async function convertPdfToWord(media: any, message: any) {
   console.log('Mocking PDF to Word Convert:', media.filename)
   return false 
 }
+
 export async function convertWordToPdf(media: any, message: any) { 
   console.log('Mocking Word to PDF Convert:', media.filename)
   return false 
@@ -32,4 +34,10 @@ export async function createAudioPrediction2(message: any) {
 export async function sendEmail(data: any) {
   console.log('Sending Email:', data)
   return { status: 200 }
+}
+
+export async function getBase64FromEndpoint(endpoint: string) {
+  const response = await axios.get(endpoint, { responseType: 'arraybuffer' });
+  const b64data = Buffer.from(response.data, 'binary').toString('base64');
+  return [{ mimetype: response.headers['content-type'] || 'image/png', data: b64data }];
 }

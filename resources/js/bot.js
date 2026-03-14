@@ -1,28 +1,31 @@
 console.log('✅ Bot Manager v3.0 Initialized');
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Application State
   const state = {
     currentEditorFile: null,
     monacoInstance: null,
     globalFiles: [],
+    modulesMetadata: [],
     modalActive: false
   };
 
-  // 1. Safely Parse Data from Server
   try {
     const dataEl = document.getElementById('app-data');
     if (dataEl && dataEl.dataset.commands) {
       state.globalFiles = JSON.parse(dataEl.dataset.commands);
     }
+    if (dataEl && dataEl.dataset.modules) {
+      state.modulesMetadata = JSON.parse(dataEl.dataset.modules);
+    } else {
+      state.modulesMetadata = state.globalFiles.map(f => ({ filename: f, instructions: 'No instructions', type: 'Module' }));
+    }
   } catch (e) {
     console.warn('⚠️ Could not parse global commands from HTML.', e);
   }
 
-  // 2. Toast Notification System
   function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
-    if (!container) return; // Fail gracefully if DOM is broken
+    if (!container) return; 
     
     const toast = document.createElement('div');
     const bgClass = type === 'success' ? 'bg-emerald-600' : (type === 'error' ? 'bg-red-600' : 'bg-slate-800');
@@ -31,20 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
       : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>';
 
     toast.className = `${bgClass} text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-auto`;
-    toast.innerHTML = `
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${icon}</svg>
-      <span class="text-sm font-medium">${message}</span>
-    `;
+    toast.innerHTML = `<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${icon}</svg><span class="text-sm font-medium">${message}</span>`;
     
     container.appendChild(toast);
     
-    // Animate in
     requestAnimationFrame(() => {
       toast.classList.remove('translate-y-10', 'opacity-0');
       toast.classList.add('translate-y-0', 'opacity-100');
     });
 
-    // Auto dismiss
     setTimeout(() => {
       toast.classList.remove('translate-y-0', 'opacity-100');
       toast.classList.add('translate-y-10', 'opacity-0');
@@ -52,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
-  // 3. Tab Management
   function switchTab(target) {
     const tabClients = document.getElementById('tab-clients');
     const tabEditor = document.getElementById('tab-editor');
@@ -71,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btnClients.className = 'px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all';
       btnEditor.className = 'px-4 py-2 rounded-md font-medium text-sm bg-indigo-600 text-white shadow-inner transition-all';
       
-      // Lazy load Monaco Editor
       if (!state.monacoInstance && window.require) {
         initEditor();
         loadEditorFiles();
@@ -79,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 4. Modal Management
   function openModal(clientId, assignedCommands) {
     const modal = document.getElementById('commands-modal');
     const modalContent = document.getElementById('commands-modal-content');
@@ -92,15 +87,23 @@ document.addEventListener('DOMContentLoaded', () => {
     
     modalList.innerHTML = '';
     
-    if (state.globalFiles.length === 0) {
+    if (state.modulesMetadata.length === 0) {
       modalList.innerHTML = '<div class="p-4 bg-slate-50 border border-slate-100 rounded-xl text-sm text-slate-500 italic text-center">No logic modules found. Use the Logic Editor tab to create one.</div>';
     } else {
-      state.globalFiles.forEach(file => {
-        const isChecked = assignedCommands.includes(file) ? 'checked' : '';
+      state.modulesMetadata.forEach(mod => {
+        const isChecked = assignedCommands.includes(mod.filename) ? 'checked' : '';
+        const badgeColor = mod.type === 'Command' ? 'bg-blue-100 text-blue-700' : (mod.type === 'Automation' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700');
+        
         const html = `
-          <label class="flex items-center p-3.5 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-all">
-            <input type="checkbox" name="commands[]" value="${file}" class="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" ${isChecked}>
-            <span class="ml-3 text-sm font-medium text-slate-800">${file}</span>
+          <label class="flex items-start p-3.5 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-all">
+            <input type="checkbox" name="commands[]" value="${mod.filename}" class="w-5 h-5 mt-0.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" ${isChecked}>
+            <div class="ml-3 flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-800">${mod.filename}</span>
+                <span class="px-2 py-0.5 text-[10px] uppercase font-bold rounded-md ${badgeColor}">${mod.type}</span>
+              </div>
+              <span class="text-xs text-slate-500 mt-1">${mod.instructions}</span>
+            </div>
           </label>
         `;
         modalList.insertAdjacentHTML('beforeend', html);
@@ -131,39 +134,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 300);
   }
 
-  // 5. Global Event Delegation (Bulletproof Click Handlers)
   document.body.addEventListener('click', (e) => {
-    // Buttons
     const actionBtn = e.target.closest('[data-action]');
     if (actionBtn) {
       const action = actionBtn.dataset.action;
-      
       if (action === 'switch-tab') switchTab(actionBtn.dataset.target);
-      
       if (action === 'toggle-actions') {
         const panel = document.getElementById(`actions-${actionBtn.dataset.client}`);
         if (panel) panel.classList.toggle('hidden');
       }
-
       if (action === 'open-modal') {
         const commands = JSON.parse(actionBtn.dataset.commands || '[]');
         openModal(actionBtn.dataset.client, commands);
       }
-
       if (action === 'close-modal') closeModal();
       if (action === 'create-file') createEditorFile();
       if (action === 'save-file') saveCurrentEditorFile();
       if (action === 'open-file') openEditorFile(actionBtn.dataset.filename);
     }
-
-    // Background Click Close Modal
     if (e.target.id === 'commands-modal') closeModal();
   });
 
-  // 6. Global Form Delegation
   document.body.addEventListener('submit', async (e) => {
-    
-    // Command Assignment Modal
     if (e.target.id === 'commands-form') {
       e.preventDefault();
       const form = e.target;
@@ -198,7 +190,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Send Message
     if (e.target.classList.contains('send-message-form')) {
       e.preventDefault();
       const form = e.target;
@@ -238,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  // 7. Monaco Editor Logic
   function initEditor() {
     try {
       window.require(['vs/editor/editor.main'], function () {
@@ -373,7 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Ctrl+S / Cmd+S Shortcut
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       const editorTabActive = !document.getElementById('tab-editor').classList.contains('hidden');
@@ -384,7 +373,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 8. Server-Sent Events (Realtime Status)
   function connectSSE() {
     const source = new EventSource('/whatsapp-manager/bot/qr');
     
@@ -435,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     source.onerror = function() {
       source.close();
-      setTimeout(connectSSE, 5000); // Reconnect silently in bg
+      setTimeout(connectSSE, 5000);
     };
   }
 

@@ -2,11 +2,8 @@ import { Client, Message } from 'whatsapp-web.js'
 import { UserSession } from '../../Services/SessionManager'
 
 export default class ExampleCommand {
-  private client: Client
-
-  constructor(client: Client) {
-    this.client = client
-  }
+  public type = 'Command'
+  public instructions = '!hello | !echo <text>'
 
   async handle(message: Message, client: Client, session: UserSession) {
     const body = message.body || " "
@@ -22,7 +19,6 @@ export default class ExampleCommand {
         await message.reply(text || "Say something!")
         break
       default:
-        // By default, do nothing and let other listeners or manual chats operate
         break
     }
   }

@@ -19,12 +19,13 @@ export default class BotController {
     })
     
     const commandFiles = CommandRegistry.getAvailableFiles()
+    const modulesMetadata = CommandRegistry.getAvailableModules()
     
     return view.render('bot', { 
       clients: clientsData, 
       commandFiles, 
-      // Safe JSON stringification for HTML data attribute mapping
-      commandFilesJson: JSON.stringify(commandFiles)
+      commandFilesJson: JSON.stringify(commandFiles),
+      modulesMetadataJson: JSON.stringify(modulesMetadata)
     })
   }
 
@@ -73,7 +74,7 @@ export default class BotController {
     try {
       const { filename } = request.all()
       const safeName = filename.endsWith('.ts') ? filename : `${filename}.ts`
-      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewCommand {\n  async handle(message: Message, client: Client, session: UserSession) {\n    // Write your automation logic here\n  }\n}`
+      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewModule {\n  public type = 'Module'\n  public instructions = 'Add description here'\n\n  async handle(message: Message, client: Client, session: UserSession) {\n    // Write your logic here\n  }\n}`
       await CommandRegistry.saveFileContent(safeName, template)
       return response.json({ success: true, filename: safeName })
     } catch (e) {

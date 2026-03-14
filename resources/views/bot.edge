@@ -5,49 +5,34 @@
   <title>WhatsApp Bot & Automation Manager</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
-  <!-- Monaco Editor Loader -->
   <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } };</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
-  
-  <!-- Hard cache-buster ensures you don't load the broken old JS -->
   <script src="/whatsapp-manager/resources/js/bot.js?v=3.0.0" defer></script>
   
   <style>
-    /* Premium UI Enhancements */
     body { background-color: #f8fafc; }
     .spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
     .spinner-dark { border-color: rgba(99, 102, 241, 0.2); border-top-color: #4f46e5; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    
     .monaco-editor-container { height: calc(100vh - 200px); min-height: 400px; width: 100%; }
-    
-    /* Smooth Scrollbar */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    
-    /* Hide elements before Vue/Alpine-like JS takes over */
     [x-cloak] { display: none !important; }
   </style>
 </head>
 <body class="text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
 
-  <!-- Hidden Data Storage to safely pass Adonis data to JS -->
-  <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}"></div>
+  <!-- Injecting Advanced Data Schema -->
+  <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}" data-modules="{{ modulesMetadataJson }}"></div>
 
-  <!-- Toast Notification Container -->
   <div id="toast-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
 
-  <!-- Top Navigation -->
   <nav class="bg-slate-900 shadow-lg text-white shrink-0 relative z-10">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16">
@@ -65,11 +50,9 @@
     </div>
   </nav>
 
-  <!-- TAB: Bot Instances Manager -->
   <main id="tab-clients" class="flex-grow overflow-y-auto w-full bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       
-      <!-- Deployment Control -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-shadow">
         <div>
           <h2 class="text-xl font-bold text-slate-800 tracking-tight">Deploy New Instance</h2>
@@ -84,7 +67,6 @@
         </form>
       </div>
 
-      <!-- Active Instances Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="client-list">
         @if(!clients || clients.length === 0)
           <div class="col-span-full flex flex-col items-center justify-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
@@ -99,7 +81,6 @@
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-lg" id="client-{{ client.clientId }}">
               
               <div class="p-6 flex-grow">
-                <!-- Header -->
                 <div class="flex justify-between items-start mb-5">
                   <h3 class="font-bold text-lg text-slate-800 truncate pr-3" title="{{ client.clientId }}">{{ client.clientId }}</h3>
                   <span class="client-status px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
@@ -108,19 +89,17 @@
                   </span>
                 </div>
                 
-                <!-- QR Code / Status Canvas -->
                 <div class="flex justify-center mb-6 bg-slate-50 rounded-xl p-3 h-48 border border-slate-100 relative items-center shadow-inner">
                   <div class="qr-canvas flex justify-center items-center w-full h-full" id="qr-{{ client.clientId }}">
                     <div class="spinner spinner-dark"></div>
                   </div>
                 </div>
 
-                <!-- Automations Block -->
                 <div class="border-t border-slate-100 pt-4">
                   <div class="flex justify-between items-center mb-3">
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
                       <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                      Automations
+                      Logic Modules
                     </p>
                     <button data-action="open-modal" data-client="{{ client.clientId }}" data-commands="{{ JSON.stringify(client.commandFiles) }}" class="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors">Assign</button>
                   </div>
@@ -136,7 +115,6 @@
                 </div>
               </div>
 
-              <!-- Action Footer -->
               <div class="bg-slate-50 p-4 border-t border-slate-200 grid grid-cols-2 gap-3 shrink-0">
                 <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-xl font-medium text-sm transition-all shadow-sm flex justify-center items-center">
                   <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
@@ -148,7 +126,6 @@
                 </form>
               </div>
               
-              <!-- Hidden Send Message Panel -->
               <div id="actions-{{ client.clientId }}" class="hidden p-4 bg-indigo-50 border-t border-indigo-100 shrink-0">
                 <form class="send-message-form flex flex-col gap-3" data-client-id="{{ client.clientId }}">
                   <input type="text" name="chatId" placeholder="Target ID (e.g. 1234567890@c.us)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" required />
@@ -164,10 +141,7 @@
     </div>
   </main>
 
-  <!-- TAB: Code Editor -->
   <main id="tab-editor" class="hidden flex-grow w-full bg-slate-50 p-4 sm:p-6 lg:p-8 flex gap-6 overflow-hidden">
-    
-    <!-- Sidebar -->
     <aside class="w-72 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
       <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
         <h3 class="font-bold text-slate-800 text-sm tracking-wide uppercase">Logic Modules</h3>
@@ -175,12 +149,9 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
         </button>
       </div>
-      <div class="flex-grow overflow-y-auto p-3" id="editor-file-list">
-        <!-- Injected via JS -->
-      </div>
+      <div class="flex-grow overflow-y-auto p-3" id="editor-file-list"></div>
     </aside>
 
-    <!-- Editor Main Area -->
     <section class="flex-grow flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
       <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
         <h3 class="font-mono text-sm font-semibold text-slate-600 flex items-center">
@@ -193,16 +164,14 @@
         </button>
       </div>
       
-      <!-- Monaco Container -->
       <div id="monaco-container" class="monaco-editor-container bg-[#1e1e1e] flex-grow relative w-full h-full"></div>
     </section>
   </main>
 
-  <!-- MODAL: Manage Commands -->
   <div id="commands-modal" class="fixed inset-0 z-[60] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="commands-modal-content">
       <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
-        <h3 class="font-bold text-xl text-slate-800">Assign Automations</h3>
+        <h3 class="font-bold text-xl text-slate-800">Assign Modules</h3>
         <button data-action="close-modal" class="text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full p-2 transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -211,9 +180,7 @@
         <p class="text-sm text-slate-600 mb-5">Link logic modules to <strong id="modal-client-id-display" class="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded"></strong>. These scripts will automatically handle incoming messages for this specific client.</p>
         <form id="commands-form">
           <input type="hidden" id="modal-client-id" name="clientId">
-          <div class="space-y-3 max-h-[40vh] overflow-y-auto pr-2" id="modal-checkbox-list">
-            <!-- Injected via JS -->
-          </div>
+          <div class="space-y-3 max-h-[45vh] overflow-y-auto pr-2" id="modal-checkbox-list"></div>
           <div class="mt-8 flex justify-end gap-3 pt-5 border-t border-slate-100">
             <button type="button" data-action="close-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
             <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-indigo-700 transition-colors flex items-center">
