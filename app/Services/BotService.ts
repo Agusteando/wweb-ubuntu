@@ -2,7 +2,7 @@ import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
-import CommandRegistry from './CommandRegistry'
+import CommandRegistry from 'App/Services/CommandRegistry'
 import axios from 'axios'
 
 export interface ClientConfig {

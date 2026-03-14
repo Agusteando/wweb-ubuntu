@@ -1,0 +1,17 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Go to app
+        run: cd ~/wweb-ubuntu && pwd
+
+      - name: Deploy
+        run: cd ~/wweb-ubuntu && git fetch origin && git reset --hard origin/main && npm install && npm run build && pm2 restart wweb-ubuntu --update-env

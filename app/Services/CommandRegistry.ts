@@ -2,16 +2,16 @@ import { Client, Message } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
-import SessionManager from './SessionManager'
+import SessionManager from 'App/Services/SessionManager'
 
-class CommandRegistry {
-  public handlers: Map<string, any> = new Map()
+export default class CommandRegistry {
+  public static handlers: Map<string, any> = new Map()
 
-  private get commandsDir() {
+  private static get commandsDir() {
     return path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
   }
 
-  public async loadCommands() {
+  public static async loadCommands() {
     this.handlers.clear()
     
     try {
@@ -44,11 +44,11 @@ class CommandRegistry {
     }
   }
 
-  public getAvailableFiles(): string[] {
+  public static getAvailableFiles(): string[] {
     return Array.from(this.handlers.keys())
   }
 
-  public getAvailableModules(): any[] {
+  public static getAvailableModules(): any[] {
     const files = Array.from(this.handlers.keys())
     return files.map(file => {
       const handlerClass = this.handlers.get(file)
@@ -71,20 +71,20 @@ class CommandRegistry {
     })
   }
 
-  public async getFileContent(filename: string): Promise<string> {
+  public static async getFileContent(filename: string): Promise<string> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
     const fullPath = path.join(this.commandsDir, safePath)
     return await fs.readFile(fullPath, 'utf-8')
   }
 
-  public async saveFileContent(filename: string, content: string): Promise<void> {
+  public static async saveFileContent(filename: string, content: string): Promise<void> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
     const fullPath = path.join(this.commandsDir, safePath)
     await fs.writeFile(fullPath, content, 'utf-8')
     await this.loadCommands() // Hot reload!
   }
 
-  public async execute(commandFiles: string[], message: Message, client: Client) {
+  public static async execute(commandFiles: string[], message: Message, client: Client) {
     const session = SessionManager.getOrCreate(message.from)
     
     if (!commandFiles || commandFiles.length === 0) return
@@ -111,8 +111,3 @@ class CommandRegistry {
     }
   }
 }
-
-export default new CommandRegistry()
-
-import CommandRegistry from './app/Services/CommandRegistry'
-export default CommandRegistry
