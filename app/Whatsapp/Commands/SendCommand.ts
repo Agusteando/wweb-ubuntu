@@ -6,7 +6,7 @@ export default class SendCommand {
   public type = 'Command'
   public instructions = '!send <to: email> <subject: text> - Sends email with attached media if quoted'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, session: UserSession) {
     const body = message.body || ''
     const cmd = body.split(' ')[0].toLowerCase()
 
@@ -15,11 +15,13 @@ export default class SendCommand {
             if (!session.adjuntados) session.adjuntados = []
 
             var argumentos = body.replace(cmd, "").replace('🐺', '').trim().split(/\s(?=\w+:)/)
-                .reduce((acc, el) => {
-                    const [key, value] = el.split(/:(.+)/);
+                .reduce((acc: any, el: string) => {
+                    const parts = el.split(/:(.+)/);
+                    const key = parts[0];
+                    const value = parts[1];
                     if (key && value) acc[key.trim()] = value.trim();
                     return acc;
-                }, {} as any);
+                }, {});
 
             if (message.hasQuotedMsg) {
                 var quotedMsg = await message.getQuotedMessage();
@@ -41,7 +43,7 @@ export default class SendCommand {
             } else {
                 message.reply("Error al enviar correo: " + JSON.stringify(result));
             }
-        } catch (error) {
+        } catch (error: any) {
             message.reply(error.message);
         }
     }

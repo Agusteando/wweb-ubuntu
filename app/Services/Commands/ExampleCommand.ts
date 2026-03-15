@@ -1,7 +1,7 @@
 import { Client, Message } from 'whatsapp-web.js'
 
 export default class ExampleCommand {
-  private client: Client
+  public client: Client
   public fileName?: string
 
   constructor(client: Client) {

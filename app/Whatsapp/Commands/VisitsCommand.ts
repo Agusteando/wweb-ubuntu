@@ -6,7 +6,7 @@ export default class VisitsCommand {
   public type = 'Command'
   public instructions = '!visits - Fetches visits chart from bot.casitaapps.com'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, _session: UserSession) {
     const body = message.body || ''
     if (body.startsWith('!visits')) {
         try {
@@ -21,7 +21,7 @@ export default class VisitsCommand {
             } else {
                 await message.reply("No data available or error fetching chart data.");
             }
-        } catch (error) {
+        } catch (error: any) {
             await message.reply("An error occurred while processing the request.");
         }
     }

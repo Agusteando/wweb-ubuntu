@@ -43,7 +43,7 @@ export default class BotService {
         this.configs.set(clientId, rehydratedConfig as ClientConfig)
         this.addClient(clientId, false)
       }
-    } catch (e) {
+    } catch (e: any) {
       // First run: Registry does not exist yet. No action needed.
     }
   }
@@ -90,7 +90,7 @@ export default class BotService {
       if (msg.fromMe) await this.handleMessage(clientId, msg, client) 
     })
 
-    client.initialize().catch(err => {
+    client.initialize().catch((err: any) => {
       console.error(`Error initializing ${clientId}:`, err)
       this.statuses.set(clientId, 'error')
     })
@@ -138,7 +138,7 @@ export default class BotService {
       }
 
       return await client.sendMessage(chatId, media, { caption })
-    } catch (e) {
+    } catch (e: any) {
       console.error(`Media Sending Error for ${clientId}:`, e)
       throw new Error(`Failed to send media: ${e.message}`)
     }
@@ -158,6 +158,6 @@ export default class BotService {
     
     try {
       await fs.rm(path.join(this.dataDir, '.wwebjs_auth', `session-${clientId}`), { recursive: true, force: true })
-    } catch (e) {}
+    } catch (e: any) {}
   }
 }

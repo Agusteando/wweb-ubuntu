@@ -6,7 +6,7 @@ export default class MediaAutomation {
   public type = 'Automation'
   public instructions = 'Converts PDF/Word for specific remote and auto-stores PDFs'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, session: UserSession) {
     if (message.hasMedia) {
         try {
             const media = await message.downloadMedia();
@@ -35,7 +35,7 @@ export default class MediaAutomation {
                 }
                 session.alternateAdjuntados.push(media);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error processing media:', e);
         }
     }

@@ -5,7 +5,7 @@ export default class ExampleCommand {
   public type = 'Command'
   public instructions = '!hello | !echo <text>'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, _session: UserSession) {
     const body = message.body || " "
     const cmd = body.split(" ")[0].toLowerCase()
     const args = body.split(" ").filter(arg => arg.trim() !== '')

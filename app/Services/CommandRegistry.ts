@@ -28,7 +28,7 @@ export default class CommandRegistry {
             if (require.cache[resolvedPath]) {
               delete require.cache[resolvedPath]
             }
-          } catch(e) {} // ignore if not cached yet
+          } catch(e: any) {} // ignore if not cached yet
           
           const imported = require(commandPath)
           const handler = imported.default || imported
@@ -65,7 +65,7 @@ export default class CommandRegistry {
 
         if (handlerClass.type) type = handlerClass.type
         else if (instance && instance.type) type = instance.type
-      } catch (e) {}
+      } catch (e: any) {}
 
       return { filename: file, instructions, type }
     })

@@ -9,7 +9,7 @@ export default class UploadDriveCommand {
   public type = 'Command'
   public instructions = '!upload-drive [folderName] - Responde a un mensaje con archivo para subir a Drive'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, _session: UserSession) {
     const body = message.body || ''
     if (!body.startsWith('!upload-drive')) return
 
@@ -40,8 +40,10 @@ export default class UploadDriveCommand {
                             fields: 'files(id, name)'
                         });
 
-                        if (folderRes.data.files.length > 0) {
-                            folderId = folderRes.data.files[0].id;
+                        const files = folderRes.data.files || [];
+
+                        if (files.length > 0 && files[0].id) {
+                            folderId = files[0].id;
                         } else {
                             const createFolderRes = await drive.files.create({
                                 requestBody: {
@@ -51,7 +53,9 @@ export default class UploadDriveCommand {
                                 },
                                 fields: 'id'
                             });
-                            folderId = createFolderRes.data.id;
+                            if (createFolderRes.data.id) {
+                                folderId = createFolderRes.data.id;
+                            }
                         }
                     }
 
@@ -83,8 +87,8 @@ export default class UploadDriveCommand {
                         fields: 'id, webViewLink'
                     });
 
-                    const fileId = fileRes.data.id;
-                    const fileLink = fileRes.data.webViewLink;
+                    const fileId = fileRes.data.id || 'unknown';
+                    const fileLink = fileRes.data.webViewLink || 'unknown';
 
                     fs.unlinkSync(filePath);
 
@@ -98,7 +102,7 @@ export default class UploadDriveCommand {
         } else {
             await message.reply('⚠️ *Error:* Please quote a message that contains the media you want to upload.');
         }
-    } catch (error) {
+    } catch (error: any) {
         await message.reply(`❌ *Error executing !upload-drive command:* ${error.message}`);
     }
   }

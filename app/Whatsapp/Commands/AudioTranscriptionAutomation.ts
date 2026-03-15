@@ -10,7 +10,7 @@ export default class AudioTranscriptionAutomation {
   private preventUnwanted = false;
   private botIsReplying = false;
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, session: UserSession) {
     const allowedGroups = ['120363025945746778@g.us', '120363164004982656@g.us']
     
     if ((allowedGroups.includes(message.id.remote) || !message.id.remote.includes('@g.us')) && 
@@ -29,7 +29,7 @@ export default class AudioTranscriptionAutomation {
                     fs.unlinkSync(predictionResult.audioFilePath);
                 }
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error while processing the audio message:', err);
         }
     }

@@ -55,7 +55,7 @@ export default class BotController {
     try {
       const content = await CommandRegistry.getFileContent(params.name)
       return response.json({ success: true, content })
-    } catch (e) {
+    } catch (e: any) {
       return response.status(404).json({ success: false, error: 'File not found' })
     }
   }
@@ -65,7 +65,7 @@ export default class BotController {
       const { filename, content } = request.all()
       await CommandRegistry.saveFileContent(filename, content)
       return response.json({ success: true })
-    } catch (e) {
+    } catch (e: any) {
       return response.status(500).json({ success: false, error: e.message })
     }
   }
@@ -74,10 +74,10 @@ export default class BotController {
     try {
       const { filename } = request.all()
       const safeName = filename.endsWith('.ts') ? filename : `${filename}.ts`
-      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewModule {\n  public type = 'Module'\n  public instructions = 'Add description here'\n\n  async handle(message: Message, client: Client, session: UserSession) {\n    // Write your logic here\n  }\n}`
+      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewModule {\n  public type = 'Module'\n  public instructions = 'Add description here'\n\n  async handle(message: Message, _client: Client, _session: UserSession) {\n    // Write your logic here\n  }\n}`
       await CommandRegistry.saveFileContent(safeName, template)
       return response.json({ success: true, filename: safeName })
-    } catch (e) {
+    } catch (e: any) {
       return response.status(500).json({ success: false, error: e.message })
     }
   }
@@ -86,7 +86,7 @@ export default class BotController {
     try {
       const result = await this.botService.sendMessage(params.clientId, request.input('chatId'), request.input('message'))
       return response.json({ success: true, result })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({ success: false, error: error.message })
     }
   }
@@ -96,7 +96,7 @@ export default class BotController {
     try {
       const result = await this.botService.sendMedia(params.clientId, chatId, mediaType, source, caption, mimeType, filename)
       return response.json({ success: true, result })
-    } catch (error) {
+    } catch (error: any) {
       return response.status(500).json({ success: false, error: error.message })
     }
   }

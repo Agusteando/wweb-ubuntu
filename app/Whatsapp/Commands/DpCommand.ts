@@ -7,7 +7,7 @@ export default class DpCommand {
   public type = 'Command'
   public instructions = '!dp <search_term> - Searches user and sets selection mode. Send a number to select.'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, session: UserSession) {
     const body = message.body || ''
     const cmd = body.split(' ')[0].toLowerCase()
 
@@ -15,7 +15,8 @@ export default class DpCommand {
         const index = parseInt(body.trim()) - 1
         if (session.remember && session.remember[index]) {
             const user = session.remember[index]
-            await message.reply(`Seleccionaste a ${user.name.fullName}.`)
+            const fullName = user.name?.fullName || 'Usuario';
+            await message.reply(`Seleccionaste a ${fullName}.`)
             session.waiting = false
             session.cmd = null
             session.remember = null
@@ -44,7 +45,9 @@ export default class DpCommand {
 
             let userListMessage = '*Usuarios encontrados:* Seleccione un número para interactuar.\n';
             users.forEach((user, index) => {
-                userListMessage += `${index + 1}. ${user.name.fullName} - ${user.primaryEmail}\n`;
+                const fullName = user.name?.fullName || 'Desconocido';
+                const primaryEmail = user.primaryEmail || 'Sin email';
+                userListMessage += `${index + 1}. ${fullName} - ${primaryEmail}\n`;
             });
 
             await message.reply(userListMessage);
@@ -55,7 +58,7 @@ export default class DpCommand {
                 session.cmd = 'DP_SELECTION';
             }, 500);
 
-        } catch (error) {
+        } catch (error: any) {
             message.reply("Hubo un error al buscar el usuario.");
         }
     }

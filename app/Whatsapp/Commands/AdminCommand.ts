@@ -7,7 +7,7 @@ export default class AdminCommand {
   public type = 'Command'
   public instructions = '!admin <search> | !admin username <email> <first>, <last> | !admin password <email>'
 
-  async handle(message: Message, client: Client, session: UserSession) {
+  async handle(message: Message, _client: Client, _session: UserSession) {
     const body = message.body || ''
     if (!body.startsWith('!admin')) return
 
@@ -49,14 +49,16 @@ export default class AdminCommand {
             if (users && users.length) {
                 let replyMessage = '*Usuarios encontrados:*\n';
                 users.forEach((user, index) => {
-                    replyMessage += `${index + 1}. ${user.name.fullName} - ${user.primaryEmail}\n`;
+                    const fullName = user.name?.fullName || 'Desconocido';
+                    const primaryEmail = user.primaryEmail || 'Sin email';
+                    replyMessage += `${index + 1}. ${fullName} - ${primaryEmail}\n`;
                 });
                 message.reply(replyMessage);
             } else {
                 message.reply('No se encontraron usuarios.');
             }
         }
-    } catch (error) {
+    } catch (error: any) {
         message.reply('Error al ejecutar el comando !admin: ' + error.message);
     }
   }
