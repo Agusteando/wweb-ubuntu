@@ -11,11 +11,14 @@ export default class BotServiceProvider {
   }
 
   public async boot() {
-    // Initialize bots securely on boot to rehydrate sessions and listeners
     const botService = this.app.container.use('App/Services/BotService') as BotService
     await botService.init()
   }
 
   public async ready() {}
-  public async shutdown() {}
+
+  public async shutdown() {
+    const botService = this.app.container.use('App/Services/BotService') as BotService
+    await botService.shutdown()
+  }
 }

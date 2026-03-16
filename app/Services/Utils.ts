@@ -8,14 +8,12 @@ import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
 import tmp from 'tmp'
 
 export async function getGoogleAdminAuth(scopes: string[]) {
-  // Unify standard and legacy paths into a single source of truth
-  const credPath = Env.get('GOOGLE_CREDENTIALS_PATH') || Env.get('CREDENTIALS_PATH')
+  const credPath = Env.get('GOOGLE_CREDENTIALS_PATH')
   
   if (!credPath) {
-    throw new Error('Missing environment variable: GOOGLE_CREDENTIALS_PATH or CREDENTIALS_PATH is required to use Google API features.')
+    throw new Error('Missing environment variable: GOOGLE_CREDENTIALS_PATH is required to use Google API features.')
   }
 
-  // Intelligently handle absolute Linux paths vs local project paths
   const absolutePath = path.isAbsolute(credPath)
     ? credPath
     : path.resolve(Application.appRoot, credPath)

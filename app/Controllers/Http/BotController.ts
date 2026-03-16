@@ -97,7 +97,7 @@ export default class BotController {
     try {
       const { filename } = request.all()
       const safeName = filename.endsWith('.ts') ? filename : `${filename}.ts`
-      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from '../../Services/SessionManager'\n\nexport default class NewModule {\n  public type = 'Module'\n  public instructions = 'Add description here'\n\n  async handle(message: Message, _client: Client, _session: UserSession) {\n    // Write your logic here\n  }\n}`
+      const template = `import { Client, Message } from 'whatsapp-web.js'\nimport { UserSession } from 'App/Services/SessionManager'\n\nexport default class NewModule {\n  public type = 'Module'\n  public instructions = 'Add description here'\n\n  async handle(message: Message, _client: Client, _session: UserSession) {\n    // Write your logic here\n  }\n}`
       await CommandRegistry.saveFileContent(safeName, template)
       return response.json({ success: true, filename: safeName })
     } catch (e: any) {

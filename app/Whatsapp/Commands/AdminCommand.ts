@@ -1,6 +1,6 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
-import { getGoogleAdminAuth } from '../../Services/Utils'
+import { UserSession } from 'App/Services/SessionManager'
+import { getGoogleAdminAuth } from 'App/Services/Utils'
 import { google } from 'googleapis'
 
 export default class AdminCommand {

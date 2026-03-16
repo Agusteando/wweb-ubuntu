@@ -7,11 +7,8 @@ export default Env.rules({
   APP_NAME: Env.schema.string(),
   NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
   
-  WA_SESSION_DIR: Env.schema.string.optional(),
-  
-  // Reconciled Google Credentials variables (both are accepted, GOOGLE_ is preferred)
-  GOOGLE_CREDENTIALS_PATH: Env.schema.string.optional(),
-  CREDENTIALS_PATH: Env.schema.string.optional(),
+  WA_SESSION_DIR: Env.schema.string(),
+  GOOGLE_CREDENTIALS_PATH: Env.schema.string(),
   
   G_SUITE_ADMIN_EMAIL: Env.schema.string.optional(),
   G_SUITE_DOMAIN: Env.schema.string.optional(),
@@ -19,7 +16,6 @@ export default Env.rules({
   
   OPENAI_API_KEY: Env.schema.string.optional(),
   
-  // Adobe PDF Services credentials
   ADOBE_CLIENT_ID: Env.schema.string.optional(),
   ADOBE_CLIENT_SECRET: Env.schema.string.optional(),
   ADOBE_ORGANIZATION_ID: Env.schema.string.optional(),

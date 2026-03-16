@@ -1,5 +1,5 @@
 import { Client, Message, MessageMedia } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
+import { UserSession } from 'App/Services/SessionManager'
 import axios from 'axios'
 
 export default class VisitsCommand {

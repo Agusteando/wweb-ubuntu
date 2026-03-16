@@ -1,6 +1,6 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
-import { sendEmail } from '../../Services/Utils'
+import { UserSession } from 'App/Services/SessionManager'
+import { sendEmail } from 'App/Services/Utils'
 
 export default class SendCommand {
   public type = 'Command'

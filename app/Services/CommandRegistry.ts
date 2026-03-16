@@ -1,46 +1,78 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { promises as fs } from 'fs'
+import { promises as fs, existsSync } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 import SessionManager from 'App/Services/SessionManager'
+import Env from '@ioc:Adonis/Core/Env'
+import * as ts from 'typescript'
 
 export default class CommandRegistry {
   public static handlers: Map<string, any> = new Map()
 
-  private static get commandsDir() {
+  private static get userScriptsDir() {
+    return path.join(Env.get('WA_SESSION_DIR'), 'scripts')
+  }
+
+  private static get defaultScriptsDir() {
     return path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
   }
 
   public static async loadCommands() {
     this.handlers.clear()
     
-    try {
-      await fs.mkdir(this.commandsDir, { recursive: true })
-      const files = await fs.readdir(this.commandsDir)
-      
-      for (const file of files) {
-        if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
-          const commandPath = path.join(this.commandsDir, file)
-          
-          try {
-            const resolvedPath = require.resolve(commandPath)
-            if (require.cache[resolvedPath]) {
-              delete require.cache[resolvedPath]
-            }
-          } catch(e: any) {} 
-          
-          const imported = require(commandPath)
-          const handler = imported.default || imported
-          
-          if (handler) {
-            this.handlers.set(file, handler)
+    const scriptsDir = this.userScriptsDir
+    await fs.mkdir(scriptsDir, { recursive: true })
+
+    if (existsSync(this.defaultScriptsDir)) {
+      const defaults = await fs.readdir(this.defaultScriptsDir)
+      for (const file of defaults) {
+        if (file.endsWith('.ts')) {
+          const targetPath = path.join(scriptsDir, file)
+          if (!existsSync(targetPath)) {
+            const content = await fs.readFile(path.join(this.defaultScriptsDir, file), 'utf-8')
+            await fs.writeFile(targetPath, content, 'utf-8')
           }
         }
       }
-      console.log(`Loaded ${this.handlers.size} WhatsApp logic modules.`)
-    } catch (err) {
-      console.error('Failed to load logic modules:', err)
     }
+
+    const files = await fs.readdir(scriptsDir)
+    
+    for (const file of files) {
+      if (file.endsWith('.ts') && !file.endsWith('.d.ts')) {
+        const tsPath = path.join(scriptsDir, file)
+        const jsFilename = file.replace(/\.ts$/, '.js')
+        const jsPath = path.join(scriptsDir, jsFilename)
+        
+        const tsContent = await fs.readFile(tsPath, 'utf-8')
+        const jsContent = ts.transpileModule(tsContent, {
+          compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2022,
+            esModuleInterop: true
+          }
+        }).outputText
+        await fs.writeFile(jsPath, jsContent, 'utf-8')
+        
+        try {
+          const resolvedPath = require.resolve(jsPath)
+          if (require.cache[resolvedPath]) {
+            delete require.cache[resolvedPath]
+          }
+        } catch(e: any) {} 
+        
+        try {
+          const imported = require(jsPath)
+          const handler = imported.default || imported
+          if (handler) {
+            this.handlers.set(file, handler) 
+          }
+        } catch(err) {
+          console.error(`Failed to load compiled module ${file}:`, err)
+        }
+      }
+    }
+    console.log(`Loaded ${this.handlers.size} WhatsApp logic modules.`)
   }
 
   public static getAvailableFiles(): string[] {
@@ -72,13 +104,14 @@ export default class CommandRegistry {
 
   public static async getFileContent(filename: string): Promise<string> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const fullPath = path.join(this.commandsDir, safePath)
+    const fullPath = path.join(this.userScriptsDir, safePath)
+    if (!existsSync(fullPath)) throw new Error('File not found')
     return await fs.readFile(fullPath, 'utf-8')
   }
 
   public static async saveFileContent(filename: string, content: string): Promise<void> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const fullPath = path.join(this.commandsDir, safePath)
+    const fullPath = path.join(this.userScriptsDir, safePath)
     await fs.writeFile(fullPath, content, 'utf-8')
     await this.loadCommands()
   }
@@ -95,18 +128,13 @@ export default class CommandRegistry {
         
         const rule = rules[commandFile] || { include: [], exclude: [] }
         
-        // Exclusions: if the chat is explicitly excluded, skip it.
         if (rule.exclude && rule.exclude.includes(message.from)) {
           continue;
         }
 
-        // Group inclusion rule: if it's a group, block by default UNLESS explicitly included.
         if (isGroup && (!rule.include || !rule.include.includes(message.from))) {
           continue;
         }
-
-        // Direct message check: allowed by default unless excluded (checked above), but we check if include is enforced globally.
-        // We only enforce strict include for groups as requested ("by default automations won't be triggered on groups unless enabled").
 
         try {
           if (typeof handlerClass.handle === 'function') {

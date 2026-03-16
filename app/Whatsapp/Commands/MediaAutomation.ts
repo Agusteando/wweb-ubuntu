@@ -1,6 +1,6 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
-import { convertPdfToWord, convertWordToPdf } from '../../Services/Utils'
+import { UserSession } from 'App/Services/SessionManager'
+import { convertPdfToWord, convertWordToPdf } from 'App/Services/Utils'
 
 export default class MediaAutomation {
   public type = 'Automation'

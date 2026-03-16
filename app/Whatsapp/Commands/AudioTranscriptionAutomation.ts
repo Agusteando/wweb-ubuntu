@@ -1,6 +1,6 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
-import { createAudioPrediction2 } from '../../Services/Utils'
+import { UserSession } from 'App/Services/SessionManager'
+import { createAudioPrediction2 } from 'App/Services/Utils'
 import fs from 'fs'
 
 export default class AudioTranscriptionAutomation {
@@ -11,7 +11,6 @@ export default class AudioTranscriptionAutomation {
   private botIsReplying = false;
 
   async handle(message: Message, _client: Client, session: UserSession) {
-    // Note: Group filtering is now dynamically handled globally in CommandRegistry based on Include rules.
     if (message.hasMedia && !session.skip && 
         (message.type === 'ptt' || (message.type === 'audio' && !this.preventUnwanted))) {
         try {

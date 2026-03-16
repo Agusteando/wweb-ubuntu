@@ -1,5 +1,5 @@
 import { Client, Message } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
+import { UserSession } from 'App/Services/SessionManager'
 
 export default class ExampleCommand {
   public type = 'Command'

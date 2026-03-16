@@ -26,6 +26,10 @@
     {
       "pattern": "resources/js/**/*.js",
       "reloadServer": false
+    },
+    {
+      "pattern": "app/Whatsapp/Commands/**/*.ts",
+      "reloadServer": false
     }
   ]
 }

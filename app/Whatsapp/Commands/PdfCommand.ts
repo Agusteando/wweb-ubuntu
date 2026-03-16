@@ -1,5 +1,5 @@
 import { Client, Message, MessageMedia } from 'whatsapp-web.js'
-import { UserSession } from '../../Services/SessionManager'
+import { UserSession } from 'App/Services/SessionManager'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
@@ -45,7 +45,6 @@ export default class PdfCommand {
                 const mimeType = media.mimetype;
                 
                 if (mimeType === 'application/pdf') {
-                    // Wrapped safely in a promise to handle tmp directories cleanly
                     await new Promise<void>((resolve) => {
                         tmp.dir({ unsafeCleanup: true }, async (err, dirPath, cleanupCallback) => {
                             if (err) {
