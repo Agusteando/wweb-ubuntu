@@ -1,4 +1,4 @@
-import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
+import { Client, LocalAuth, Message } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
