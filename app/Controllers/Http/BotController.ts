@@ -127,6 +127,7 @@ export default class BotController {
 
     const args: any = {};
     let contacts: string[] = [];
+    let mediaMessage: MessageMedia | null = null;
 
     try {
       if (typeof chatId === 'string') {
@@ -143,13 +144,13 @@ export default class BotController {
         }
       }
 
+      // Handle file if `filepath` is given
       if (filepath) {
-        const media = await MessageMedia.fromFilePath(filepath);
-        if (filename) media.filename = filename;
-
-        if (caption) args.caption = caption;
-        message = media;
+        mediaMessage = await MessageMedia.fromFilePath(filepath);
+        if (filename) mediaMessage.filename = filename;
+        if (mimetype) mediaMessage.mimetype = mimetype;
       } else {
+        // Handle uploaded file from the request
         const uploadedFile = request.file('file');
 
         if (uploadedFile) {
@@ -166,26 +167,50 @@ export default class BotController {
 
           const tempFilePath = path.join(customTempDir, safeFilename);
 
-          const media = await MessageMedia.fromFilePath(tempFilePath);
+          mediaMessage = await MessageMedia.fromFilePath(tempFilePath);
+          
           if (filename || uploadedFile.clientName) {
-            media.filename = filename || uploadedFile.clientName;
+            mediaMessage.filename = filename || uploadedFile.clientName;
           }
 
-          args.mimetype = uploadedFile.headers['content-type'] || mimetype;
-
-          if (caption) args.caption = caption;
-          message = media;
+          const resolvedMime = uploadedFile.headers['content-type'] || mimetype;
+          if (resolvedMime) {
+            mediaMessage.mimetype = resolvedMime;
+          }
 
           fs.unlinkSync(tempFilePath);
         }
       }
 
-      if (!message) {
-        message = caption || message;
-      } else if (typeof message === 'string') {
-        args.caption = message;
+      let finalMessageContent: any;
+
+      if (mediaMessage) {
+        finalMessageContent = mediaMessage;
+        
+        // Handle caption vs message correctly
+        if (caption) {
+          args.caption = caption;
+        } else if (typeof message === 'string') {
+          args.caption = message;
+        }
+
+        // Intelligently force inline display for visual media instead of document attachment
+        const isImageOrVideo = mediaMessage.mimetype.startsWith('image/') || mediaMessage.mimetype.startsWith('video/');
+        if (isImageOrVideo) {
+          args.sendMediaAsDocument = false; 
+        }
+
+        // Intelligently route audio payloads as direct Voice Notes
+        if (audio || mediaMessage.mimetype.startsWith('audio/')) {
+          args.sendAudioAsVoice = true;
+        }
+
+      } else {
+        // If no media is provided, assume it's a plain text message
+        finalMessageContent = message || caption || '';
       }
 
+      // Handle mentions
       if (mentions) {
         for (let i = 0; i < mentions.length; i++) {
           contacts.push(mentions[i] + '@c.us');
@@ -193,10 +218,7 @@ export default class BotController {
         args.mentions = contacts;
       }
 
-      if (audio) {
-        args.sendAudioAsVoice = true;
-      }
-
+      // Merge in arbitrary options (can safely override the smart settings above if explicitly requested)
       if (options && typeof options === 'object') {
         Object.assign(args, options);
       }
@@ -206,7 +228,7 @@ export default class BotController {
       for (let i = 0; i < chatId.length; i++) {
         const currentChatId = chatId[i];
         try {
-          const result = await client.sendMessage(currentChatId, message, args);
+          const result = await client.sendMessage(currentChatId, finalMessageContent, args);
           sentMessages.push({
             chatId: currentChatId,
             id: result.id?._serialized ?? result.id,
