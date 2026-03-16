@@ -19,6 +19,7 @@ export default class BotServiceProvider {
 
   public async shutdown() {
     const botService = this.app.container.use('App/Services/BotService') as BotService
+    console.log('BotServiceProvider: Initiating graceful WhatsApp shutdown...')
     await botService.shutdown()
   }
 }

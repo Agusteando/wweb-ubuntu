@@ -1,8 +1,8 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js'
 import { promises as fs } from 'fs'
 import path from 'path'
-import Application from '@ioc:Adonis/Core/Application'
 import CommandRegistry from 'App/Services/CommandRegistry'
+import Env from '@ioc:Adonis/Core/Env'
 
 export interface ClientConfig {
   clientId: string;
@@ -17,15 +17,25 @@ export default class BotService {
   public configs: Map<string, ClientConfig> = new Map()
   
   private dataDir: string
+  private authDir: string
   private registryFile: string
+  
+  private isShuttingDown: boolean = false
+  private initLocks: Set<string> = new Set()
 
   constructor() {
-    this.dataDir = path.join(Application.appRoot, 'data')
+    this.dataDir = Env.get('WA_SESSION_DIR')
+    
+    if (!this.dataDir) {
+      throw new Error('CRITICAL: WA_SESSION_DIR environment variable is missing.')
+    }
+
+    this.authDir = path.join(this.dataDir, 'auth')
     this.registryFile = path.join(this.dataDir, 'clients.json')
   }
 
   public async init() {
-    await fs.mkdir(this.dataDir, { recursive: true })
+    await fs.mkdir(this.authDir, { recursive: true })
     await CommandRegistry.loadCommands()
 
     try {
@@ -44,8 +54,33 @@ export default class BotService {
         this.addClient(clientId, false)
       }
     } catch (e: any) {
-      // First run: Registry does not exist yet. No action needed.
+      // Registry missing on first boot, safe to ignore.
     }
+  }
+
+  public async shutdown() {
+    this.isShuttingDown = true
+    const destructionPromises: Promise<void>[] = []
+    
+    for (const [clientId, client] of this.clients.entries()) {
+      const destroyPromise = new Promise<void>(async (resolve) => {
+        try {
+          await client.destroy()
+          console.log(`[${clientId}] Gracefully closed Chromium profile.`)
+        } catch (err) {
+          console.error(`[${clientId}] Error closing client during shutdown:`, err)
+        } finally {
+          resolve()
+        }
+      })
+      
+      // Forcefully resolve after 8 seconds to prevent PM2 hang
+      const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 8000))
+      destructionPromises.push(Promise.race([destroyPromise, timeoutPromise]))
+    }
+
+    await Promise.all(destructionPromises)
+    this.clients.clear()
   }
 
   public async saveRegistry() {
@@ -59,7 +94,11 @@ export default class BotService {
   }
 
   public addClient(clientId: string, saveToRegistry = true): void {
+    if (this.isShuttingDown) return
     if (this.clients.has(clientId)) return
+    if (this.initLocks.has(clientId)) return
+
+    this.initLocks.add(clientId)
 
     if (saveToRegistry && !this.configs.has(clientId)) {
       this.configs.set(clientId, { clientId, commandFiles: [], commandRules: {} })
@@ -67,10 +106,15 @@ export default class BotService {
     }
 
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId, dataPath: path.join(this.dataDir, '.wwebjs_auth') }),
+      authStrategy: new LocalAuth({ clientId, dataPath: this.authDir }),
       puppeteer: { 
         headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ] 
       },
     })
 
@@ -81,7 +125,19 @@ export default class BotService {
     client.on('qr', (qr) => { this.qrCodes.set(clientId, qr); this.statuses.set(clientId, 'pending') })
     client.on('ready', () => { this.qrCodes.set(clientId, null); this.statuses.set(clientId, 'ready') })
     client.on('auth_failure', () => this.statuses.set(clientId, 'error'))
-    client.on('disconnected', () => { this.statuses.set(clientId, 'pending'); client.initialize() })
+    
+    client.on('disconnected', async (reason) => { 
+      console.log(`[${clientId}] Client disconnected. Reason: ${reason}`)
+      this.statuses.set(clientId, 'pending')
+      
+      if (!this.isShuttingDown) {
+        await client.destroy().catch(() => {})
+        this.clients.delete(clientId)
+        setTimeout(() => {
+          if (!this.isShuttingDown) this.addClient(clientId, false)
+        }, 5000)
+      }
+    })
 
     client.on('message', async (msg) => { 
       if (!msg.fromMe) await this.handleMessage(clientId, msg, client) 
@@ -90,10 +146,15 @@ export default class BotService {
       if (msg.fromMe) await this.handleMessage(clientId, msg, client) 
     })
 
-    client.initialize().catch((err: any) => {
-      console.error(`Error initializing ${clientId}:`, err)
-      this.statuses.set(clientId, 'error')
-    })
+    client.initialize()
+      .then(() => {
+        this.initLocks.delete(clientId)
+      })
+      .catch((err: any) => {
+        console.error(`[${clientId}] Error initializing client:`, err)
+        this.statuses.set(clientId, 'error')
+        this.initLocks.delete(clientId)
+      })
   }
 
   private async handleMessage(clientId: string, msg: Message, client: Client) {
@@ -135,18 +196,20 @@ export default class BotService {
 
   public async removeClient(clientId: string) {
     const client = this.clients.get(clientId)
+    
     if (client) {
       await client.destroy().catch(() => {})
       this.clients.delete(clientId)
     }
     
+    this.initLocks.delete(clientId)
     this.qrCodes.delete(clientId)
     this.statuses.delete(clientId)
     this.configs.delete(clientId)
     await this.saveRegistry()
     
     try {
-      await fs.rm(path.join(this.dataDir, '.wwebjs_auth', `session-${clientId}`), { recursive: true, force: true })
+      await fs.rm(path.join(this.authDir, `session-${clientId}`), { recursive: true, force: true })
     } catch (e: any) {}
   }
 }

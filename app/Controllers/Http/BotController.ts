@@ -1,5 +1,6 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
+import Env from '@ioc:Adonis/Core/Env'
 import type BotService from 'App/Services/BotService'
 import CommandRegistry from 'App/Services/CommandRegistry'
 import fs from 'fs'
@@ -150,11 +151,14 @@ export default class BotController {
         if (filename) mediaMessage.filename = filename;
         if (mimetype) mediaMessage.mimetype = mimetype;
       } else {
-        // Handle uploaded file from the request
+        // Handle uploaded file from the request securely outside the app root
         const uploadedFile = request.file('file');
 
         if (uploadedFile) {
-          const customTempDir = Application.tmpPath('uploads');
+          const sessionDir = Env.get('WA_SESSION_DIR');
+          if (!sessionDir) throw new Error('WA_SESSION_DIR missing');
+          
+          const customTempDir = path.join(sessionDir, 'uploads');
           if (!fs.existsSync(customTempDir)) {
             fs.mkdirSync(customTempDir, { recursive: true });
           }

@@ -7,6 +7,7 @@ export default Env.rules({
   APP_NAME: Env.schema.string(),
   NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
   
+  // Mandatory Runtime External Paths
   WA_SESSION_DIR: Env.schema.string(),
   GOOGLE_CREDENTIALS_PATH: Env.schema.string(),
   
