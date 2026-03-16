@@ -5,16 +5,14 @@ import fs from 'fs'
 
 export default class AudioTranscriptionAutomation {
   public type = 'Automation'
-  public instructions = 'Transcribes PTT/Audio messages for specific groups or DMs'
+  public instructions = 'Transcribes PTT/Audio messages for configured groups or DMs'
 
   private preventUnwanted = false;
   private botIsReplying = false;
 
   async handle(message: Message, _client: Client, session: UserSession) {
-    const allowedGroups = ['120363025945746778@g.us', '120363164004982656@g.us']
-    
-    if ((allowedGroups.includes(message.id.remote) || !message.id.remote.includes('@g.us')) && 
-        message.hasMedia && !session.skip && 
+    // Note: Group filtering is now dynamically handled globally in CommandRegistry based on Include rules.
+    if (message.hasMedia && !session.skip && 
         (message.type === 'ptt' || (message.type === 'audio' && !this.preventUnwanted))) {
         try {
             if (this.botIsReplying) return;

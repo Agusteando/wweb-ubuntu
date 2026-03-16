@@ -11,7 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
-  <script src="/whatsapp-manager/resources/js/bot.js?v=3.0.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=3.1.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -103,12 +103,17 @@
                     </p>
                     <button data-action="open-modal" data-client="{{ client.clientId }}" data-commands="{{ JSON.stringify(client.commandFiles) }}" class="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors">Assign</button>
                   </div>
-                  <div class="flex flex-wrap gap-2" id="badges-{{ client.clientId }}">
+                  <div class="flex flex-col gap-2" id="badges-{{ client.clientId }}">
                     @if(client.commandFiles.length === 0)
                       <span class="text-sm text-slate-400 italic block w-full bg-slate-50 p-2 rounded border border-slate-100 text-center">No logic assigned</span>
                     @else
                       @each(cmd in client.commandFiles)
-                        <span class="px-2.5 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-medium">{{ cmd }}</span>
+                        <div class="flex items-center justify-between bg-slate-100 border border-slate-200 rounded-md pr-2 pl-3 py-1.5 group">
+                          <span class="text-xs font-semibold text-slate-700">{{ cmd }}</span>
+                          <button data-action="open-rules-modal" data-client="{{ client.clientId }}" data-command="{{ cmd }}" data-rules="{{ JSON.stringify(client.commandRules) }}" class="text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors" title="Manage Rules & Exceptions">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                          </button>
+                        </div>
                       @endeach
                     @endif
                   </div>
@@ -185,6 +190,33 @@
             <button type="button" data-action="close-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
             <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-indigo-700 transition-colors flex items-center">
               Apply Configuration
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="fixed inset-0 z-[70] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="rules-modal-content">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+        <div>
+          <h3 class="font-bold text-xl text-slate-800">Rules & Exceptions</h3>
+          <p class="text-xs font-mono text-indigo-600 bg-indigo-50 inline-block px-2 py-0.5 rounded mt-1" id="rules-command-display"></p>
+        </div>
+        <button data-action="close-rules-modal" class="text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full p-2 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 flex-grow overflow-hidden flex flex-col">
+        <form id="rules-form" class="flex flex-col h-full">
+          <div id="rules-chats-list" class="flex-grow overflow-y-auto pr-2">
+            <!-- Dynamically populated contacts and groups -->
+          </div>
+          <div class="mt-6 flex justify-end gap-3 pt-5 border-t border-slate-100 shrink-0">
+            <button type="button" data-action="close-rules-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+            <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-emerald-700 transition-colors flex items-center">
+              Save Rules
             </button>
           </div>
         </form>

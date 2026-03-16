@@ -6,7 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
     monacoInstance: null,
     globalFiles: [],
     modulesMetadata: [],
-    modalActive: false
+    modalActive: false,
+    currentConfigClient: null,
+    currentConfigCommand: null,
+    clientChats: []
   };
 
   try {
@@ -95,12 +98,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const badgeColor = mod.type === 'Command' ? 'bg-blue-100 text-blue-700' : (mod.type === 'Automation' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-700');
         
         const html = `
-          <label class="flex items-start p-3.5 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-all">
+          <label class="flex items-start p-3.5 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer transition-all relative">
             <input type="checkbox" name="commands[]" value="${mod.filename}" class="w-5 h-5 mt-0.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" ${isChecked}>
-            <div class="ml-3 flex flex-col">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-slate-800">${mod.filename}</span>
-                <span class="px-2 py-0.5 text-[10px] uppercase font-bold rounded-md ${badgeColor}">${mod.type}</span>
+            <div class="ml-3 flex flex-col flex-grow">
+              <div class="flex items-center justify-between w-full">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-bold text-slate-800">${mod.filename}</span>
+                  <span class="px-2 py-0.5 text-[10px] uppercase font-bold rounded-md ${badgeColor}">${mod.type}</span>
+                </div>
               </div>
               <span class="text-xs text-slate-500 mt-1">${mod.instructions}</span>
             </div>
@@ -134,6 +139,120 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 300);
   }
 
+  // New function for Rules Config Modal
+  async function openRulesModal(clientId, commandFile, commandRulesData) {
+    state.currentConfigClient = clientId;
+    state.currentConfigCommand = commandFile;
+    
+    const modal = document.getElementById('rules-modal');
+    const modalContent = document.getElementById('rules-modal-content');
+    const display = document.getElementById('rules-command-display');
+    const listContainer = document.getElementById('rules-chats-list');
+
+    display.textContent = commandFile;
+    listContainer.innerHTML = '<div class="py-10 flex flex-col items-center"><div class="spinner spinner-dark mb-4"></div><span class="text-sm text-slate-500">Fetching Contacts & Groups...</span></div>';
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      modal.classList.remove('opacity-0');
+      modalContent.classList.remove('scale-95');
+      modalContent.classList.add('scale-100');
+    });
+
+    try {
+      const rulesStr = commandRulesData || '{}';
+      const commandRules = JSON.parse(rulesStr);
+      const specificRules = commandRules[commandFile] || { include: [], exclude: [] };
+
+      const res = await fetch(`/whatsapp-manager/api/chats/${clientId}`);
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+      
+      state.clientChats = data.chats || [];
+
+      if (state.clientChats.length === 0) {
+        listContainer.innerHTML = '<div class="text-center text-sm text-slate-500 py-6">No active chats found. Ensure the client is connected.</div>';
+        return;
+      }
+
+      listContainer.innerHTML = '';
+      
+      const groups = state.clientChats.filter(c => c.isGroup);
+      const direct = state.clientChats.filter(c => !c.isGroup);
+
+      function renderChatType(title, desc, chatArray) {
+        if (chatArray.length === 0) return '';
+        let html = `
+          <div class="mb-6">
+            <h4 class="font-bold text-slate-700 text-sm mb-1">${title}</h4>
+            <p class="text-xs text-slate-500 mb-3">${desc}</p>
+            <div class="space-y-2 max-h-48 overflow-y-auto pr-2 border border-slate-200 p-2 rounded-xl bg-slate-50">
+        `;
+        
+        chatArray.forEach(chat => {
+          const isIncluded = specificRules.include.includes(chat.id) ? 'checked' : '';
+          const isExcluded = specificRules.exclude.includes(chat.id) ? 'checked' : '';
+          
+          html += `
+            <div class="flex items-center justify-between p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
+              <div class="flex items-center overflow-hidden">
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0 mr-3 text-slate-500 font-bold text-xs">${chat.name.charAt(0).toUpperCase()}</div>
+                <div class="truncate">
+                  <p class="text-sm font-bold text-slate-800 truncate" title="${chat.name}">${chat.name}</p>
+                  <p class="text-[10px] text-slate-400 font-mono">${chat.id}</p>
+                </div>
+              </div>
+              <div class="flex gap-2 shrink-0 ml-4">
+                <label class="flex items-center text-xs font-semibold cursor-pointer select-none">
+                  <input type="checkbox" data-type="include" value="${chat.id}" class="mr-1 rounded text-emerald-500 focus:ring-emerald-500 border-slate-300" ${isIncluded}>
+                  <span class="text-emerald-600">Include</span>
+                </label>
+                <label class="flex items-center text-xs font-semibold cursor-pointer select-none">
+                  <input type="checkbox" data-type="exclude" value="${chat.id}" class="mr-1 rounded text-red-500 focus:ring-red-500 border-slate-300" ${isExcluded}>
+                  <span class="text-red-600">Exclude</span>
+                </label>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+        return html;
+      }
+
+      listContainer.innerHTML += renderChatType('Groups (Blocked by Default)', 'Check "Include" to allow this automation to trigger in specific groups.', groups);
+      listContainer.innerHTML += renderChatType('Direct Messages (Allowed by Default)', 'Check "Exclude" to block specific users from triggering this logic.', direct);
+
+      // Add mutual exclusion logic
+      listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', function() {
+          if (this.checked) {
+            const oppType = this.dataset.type === 'include' ? 'exclude' : 'include';
+            const oppCb = this.closest('.flex').querySelector(`input[data-type="${oppType}"]`);
+            if (oppCb) oppCb.checked = false;
+          }
+        });
+      });
+
+    } catch (err) {
+      listContainer.innerHTML = `<div class="text-center text-sm text-red-500 py-6">Failed to load chats: ${err.message}</div>`;
+    }
+  }
+
+  function closeRulesModal() {
+    const modal = document.getElementById('rules-modal');
+    const modalContent = document.getElementById('rules-modal-content');
+    if (!modal) return;
+
+    modal.classList.add('opacity-0');
+    modalContent.classList.remove('scale-100');
+    modalContent.classList.add('scale-95');
+    
+    setTimeout(() => {
+      modal.classList.add('hidden');
+    }, 300);
+  }
+
   document.body.addEventListener('click', (e) => {
     const actionBtn = e.target.closest('[data-action]');
     if (actionBtn) {
@@ -148,11 +267,18 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal(actionBtn.dataset.client, commands);
       }
       if (action === 'close-modal') closeModal();
+      
+      if (action === 'open-rules-modal') {
+        openRulesModal(actionBtn.dataset.client, actionBtn.dataset.command, actionBtn.dataset.rules);
+      }
+      if (action === 'close-rules-modal') closeRulesModal();
+
       if (action === 'create-file') createEditorFile();
       if (action === 'save-file') saveCurrentEditorFile();
       if (action === 'open-file') openEditorFile(actionBtn.dataset.filename);
     }
     if (e.target.id === 'commands-modal') closeModal();
+    if (e.target.id === 'rules-modal') closeRulesModal();
   });
 
   document.body.addEventListener('submit', async (e) => {
@@ -184,6 +310,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (err) {
         showToast('Network error while saving', 'error');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    if (e.target.id === 'rules-form') {
+      e.preventDefault();
+      const form = e.target;
+      
+      const include = Array.from(form.querySelectorAll('input[data-type="include"]:checked')).map(cb => cb.value);
+      const exclude = Array.from(form.querySelectorAll('input[data-type="exclude"]:checked')).map(cb => cb.value);
+
+      const btn = form.querySelector('button[type="submit"]');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Saving...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`/whatsapp-manager/api/rules/${state.currentConfigClient}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commandFile: state.currentConfigCommand, include, exclude })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Rules updated successfully', 'success');
+          closeRulesModal();
+          setTimeout(() => window.location.reload(), 500);
+        } else {
+          showToast(data.error || 'Failed to update rules', 'error');
+        }
+      } catch (err) {
+        showToast('Network error', 'error');
       } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;

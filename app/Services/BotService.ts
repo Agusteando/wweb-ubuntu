@@ -3,11 +3,11 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 import CommandRegistry from 'App/Services/CommandRegistry'
-import axios from 'axios'
 
 export interface ClientConfig {
   clientId: string;
   commandFiles: string[];
+  commandRules?: Record<string, { include: string[], exclude: string[] }>;
 }
 
 export default class BotService {
@@ -32,13 +32,13 @@ export default class BotService {
       const data = await fs.readFile(this.registryFile, 'utf-8')
       const parsed = JSON.parse(data)
       for (const [clientId, config] of Object.entries(parsed)) {
-        // Upgrade legacy singular command configs to array
         const rehydratedConfig = config as any
         if (typeof rehydratedConfig.commandFile !== 'undefined') {
           rehydratedConfig.commandFiles = rehydratedConfig.commandFile ? [rehydratedConfig.commandFile] : []
           delete rehydratedConfig.commandFile
         }
         if (!rehydratedConfig.commandFiles) rehydratedConfig.commandFiles = []
+        if (!rehydratedConfig.commandRules) rehydratedConfig.commandRules = {}
 
         this.configs.set(clientId, rehydratedConfig as ClientConfig)
         this.addClient(clientId, false)
@@ -62,7 +62,7 @@ export default class BotService {
     if (this.clients.has(clientId)) return
 
     if (saveToRegistry && !this.configs.has(clientId)) {
-      this.configs.set(clientId, { clientId, commandFiles: [] })
+      this.configs.set(clientId, { clientId, commandFiles: [], commandRules: {} })
       this.saveRegistry()
     }
 
@@ -99,7 +99,8 @@ export default class BotService {
   private async handleMessage(clientId: string, msg: Message, client: Client) {
     const config = this.configs.get(clientId)
     const commandsToRun = config?.commandFiles || []
-    await CommandRegistry.execute(commandsToRun, msg, client)
+    const rules = config?.commandRules || {}
+    await CommandRegistry.execute(commandsToRun, msg, client, rules)
   }
 
   public async setCommands(clientId: string, commandFiles: string[]) {
@@ -110,38 +111,26 @@ export default class BotService {
     }
   }
 
-  public async sendMessage(clientId: string, chatId: string, text: string) {
-    const client = this.getOrCreateClient(clientId)
-    return client.sendMessage(chatId, text)
+  public async setCommandRules(clientId: string, commandFile: string, include: string[], exclude: string[]) {
+    const config = this.configs.get(clientId)
+    if (config) {
+      if (!config.commandRules) config.commandRules = {}
+      config.commandRules[commandFile] = { include: include || [], exclude: exclude || [] }
+      await this.saveRegistry()
+    }
   }
 
-  public async sendMedia(clientId: string, chatId: string, mediaType: 'url'|'path'|'base64', source: string, caption?: string, mimeType?: string, filename?: string) {
-    const client = this.getOrCreateClient(clientId)
-    let media: MessageMedia
-
-    try {
-      if (mediaType === 'url') {
-        const response = await axios.get(source, { responseType: 'arraybuffer' })
-        const b64data = Buffer.from(response.data, 'binary').toString('base64')
-        const detectedMime = response.headers['content-type'] || mimeType || 'application/octet-stream'
-        media = new MessageMedia(detectedMime, b64data, filename || 'file')
-      } 
-      else if (mediaType === 'path') {
-        const fullPath = path.resolve(source)
-        media = MessageMedia.fromFilePath(fullPath)
-      } 
-      else if (mediaType === 'base64') {
-        if (!mimeType) throw new Error("mimeType is required for base64 uploads")
-        media = new MessageMedia(mimeType, source, filename || 'file')
-      } else {
-        throw new Error('Invalid mediaType')
-      }
-
-      return await client.sendMessage(chatId, media, { caption })
-    } catch (e: any) {
-      console.error(`Media Sending Error for ${clientId}:`, e)
-      throw new Error(`Failed to send media: ${e.message}`)
+  public async getChats(clientId: string) {
+    const client = this.clients.get(clientId)
+    if (!client || this.statuses.get(clientId) !== 'ready') {
+      throw new Error('Client is not connected')
     }
+    const chats = await client.getChats()
+    return chats.map(c => ({
+      id: c.id._serialized,
+      name: c.name || c.id.user,
+      isGroup: c.isGroup
+    }))
   }
 
   public async removeClient(clientId: string) {

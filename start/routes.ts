@@ -18,11 +18,19 @@ Route.group(() => {
   Route.post('/whatsapp-manager/editor/file', 'BotController.saveEditorFile')
   Route.post('/whatsapp-manager/editor/file/create', 'BotController.createEditorFile')
 
+  // Rules & Exceptions Routes
+  Route.get('/whatsapp-manager/api/chats/:clientId', 'BotController.getChats')
+  Route.post('/whatsapp-manager/api/rules/:clientId', 'BotController.saveRules')
+
 }).middleware('auth') // Applying Native Browser Protection
 
-// API Routes (Kept accessible or you can protect them if needed)
-Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessage')
-Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessage')
+// API Routes
+Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessages')
 
-Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMedia')
-Route.post('/whatsapp-manager/api/send-media/:clientId', 'BotController.sendMedia')
+Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessage')
+Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
+
+// Keep legacy media endpoints aliased to the new robust handler
+Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/api/send-media/:clientId', 'BotController.sendMessages')

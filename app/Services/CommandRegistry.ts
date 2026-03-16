@@ -23,12 +23,11 @@ export default class CommandRegistry {
           const commandPath = path.join(this.commandsDir, file)
           
           try {
-            // Un-cache the file explicitly to allow real-time code editor updates
             const resolvedPath = require.resolve(commandPath)
             if (require.cache[resolvedPath]) {
               delete require.cache[resolvedPath]
             }
-          } catch(e: any) {} // ignore if not cached yet
+          } catch(e: any) {} 
           
           const imported = require(commandPath)
           const handler = imported.default || imported
@@ -81,17 +80,34 @@ export default class CommandRegistry {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
     const fullPath = path.join(this.commandsDir, safePath)
     await fs.writeFile(fullPath, content, 'utf-8')
-    await this.loadCommands() // Hot reload!
+    await this.loadCommands()
   }
 
-  public static async execute(commandFiles: string[], message: Message, client: Client) {
+  public static async execute(commandFiles: string[], message: Message, client: Client, rules: Record<string, { include: string[], exclude: string[] }> = {}) {
     const session = SessionManager.getOrCreate(message.from)
+    const isGroup = message.from.endsWith('@g.us')
     
     if (!commandFiles || commandFiles.length === 0) return
 
     for (const commandFile of commandFiles) {
       const handlerClass = this.handlers.get(commandFile)
       if (handlerClass) {
+        
+        const rule = rules[commandFile] || { include: [], exclude: [] }
+        
+        // Exclusions: if the chat is explicitly excluded, skip it.
+        if (rule.exclude && rule.exclude.includes(message.from)) {
+          continue;
+        }
+
+        // Group inclusion rule: if it's a group, block by default UNLESS explicitly included.
+        if (isGroup && (!rule.include || !rule.include.includes(message.from))) {
+          continue;
+        }
+
+        // Direct message check: allowed by default unless excluded (checked above), but we check if include is enforced globally.
+        // We only enforce strict include for groups as requested ("by default automations won't be triggered on groups unless enabled").
+
         try {
           if (typeof handlerClass.handle === 'function') {
             await handlerClass.handle(message, client, session)

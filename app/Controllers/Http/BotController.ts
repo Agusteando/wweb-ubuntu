@@ -2,6 +2,9 @@ import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import type BotService from 'App/Services/BotService'
 import CommandRegistry from 'App/Services/CommandRegistry'
+import fs from 'fs'
+import path from 'path'
+import { MessageMedia } from 'whatsapp-web.js'
 
 export default class BotController {
   private get botService(): BotService {
@@ -14,7 +17,8 @@ export default class BotController {
       return {
         clientId,
         status: this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR')),
-        commandFiles: config?.commandFiles || []
+        commandFiles: config?.commandFiles || [],
+        commandRules: config?.commandRules || {}
       }
     })
     
@@ -45,6 +49,25 @@ export default class BotController {
     const commandFiles = request.input('commandFiles', [])
     await this.botService.setCommands(clientId, Array.isArray(commandFiles) ? commandFiles : [commandFiles])
     return response.json({ success: true })
+  }
+
+  public async getChats({ params, response }: HttpContextContract) {
+    try {
+      const chats = await this.botService.getChats(params.clientId)
+      return response.json({ success: true, chats })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async saveRules({ request, response, params }: HttpContextContract) {
+    try {
+      const { commandFile, include, exclude } = request.all()
+      await this.botService.setCommandRules(params.clientId, commandFile, include, exclude)
+      return response.json({ success: true })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
   }
 
   public async getEditorFiles({ response }: HttpContextContract) {
@@ -82,22 +105,180 @@ export default class BotController {
     }
   }
 
-  public async sendMessage({ request, response, params }: HttpContextContract) {
+  public async sendMessages({ request, response, params }: HttpContextContract) {
+    const clientId = params.clientId;
+    const client = this.botService.clients.get(clientId);
+
+    if (!client) {
+      return response.status(400).json({ status: 'error', error: 'WhatsApp client is not connected or ready' });
+    }
+
+    let {
+      chatId,
+      message,
+      caption,
+      audio,
+      mentions,
+      filepath,
+      mimetype,
+      options,
+      filename,
+    } = request.all();
+
+    const args: any = {};
+    let contacts: string[] = [];
+
     try {
-      const result = await this.botService.sendMessage(params.clientId, request.input('chatId'), request.input('message'))
-      return response.json({ success: true, result })
+      if (typeof chatId === 'string') {
+        chatId = [chatId];
+      }
+
+      if (!chatId || !Array.isArray(chatId) || !chatId.length) {
+        throw new Error('chatId is undefined, not an array, or empty');
+      }
+
+      for (const id of chatId) {
+        if (typeof id !== 'string' || !id.includes('@')) {
+          throw new Error(`Invalid chatId format: ${id}`);
+        }
+      }
+
+      if (filepath) {
+        const media = await MessageMedia.fromFilePath(filepath);
+        if (filename) media.filename = filename;
+
+        if (caption) args.caption = caption;
+        message = media;
+      } else {
+        const uploadedFile = request.file('file');
+
+        if (uploadedFile) {
+          const customTempDir = Application.tmpPath('uploads');
+          if (!fs.existsSync(customTempDir)) {
+            fs.mkdirSync(customTempDir, { recursive: true });
+          }
+
+          const safeFilename = `${Date.now()}_${uploadedFile.clientName}`;
+          await uploadedFile.move(customTempDir, {
+            name: safeFilename,
+            overwrite: true,
+          });
+
+          const tempFilePath = path.join(customTempDir, safeFilename);
+
+          const media = await MessageMedia.fromFilePath(tempFilePath);
+          if (filename || uploadedFile.clientName) {
+            media.filename = filename || uploadedFile.clientName;
+          }
+
+          args.mimetype = uploadedFile.headers['content-type'] || mimetype;
+
+          if (caption) args.caption = caption;
+          message = media;
+
+          fs.unlinkSync(tempFilePath);
+        }
+      }
+
+      if (!message) {
+        message = caption || message;
+      } else if (typeof message === 'string') {
+        args.caption = message;
+      }
+
+      if (mentions) {
+        for (let i = 0; i < mentions.length; i++) {
+          contacts.push(mentions[i] + '@c.us');
+        }
+        args.mentions = contacts;
+      }
+
+      if (audio) {
+        args.sendAudioAsVoice = true;
+      }
+
+      if (options && typeof options === 'object') {
+        Object.assign(args, options);
+      }
+
+      const sentMessages: any[] = [];
+
+      for (let i = 0; i < chatId.length; i++) {
+        const currentChatId = chatId[i];
+        try {
+          const result = await client.sendMessage(currentChatId, message, args);
+          sentMessages.push({
+            chatId: currentChatId,
+            id: result.id?._serialized ?? result.id,
+            timestamp: result.timestamp,
+          });
+        } catch (sendMessageError) {
+          console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError);
+        }
+      }
+
+      return response.json({
+        status: 'ok',
+        success: true,
+        messages: sentMessages,
+      });
     } catch (error: any) {
-      return response.status(500).json({ success: false, error: error.message })
+      console.error('Error in sendMessages:', error);
+      return response.status(500).json({
+        status: 'error',
+        success: false,
+        error: error.message || 'An error occurred while sending messages',
+      });
     }
   }
 
-  public async sendMedia({ request, response, params }: HttpContextContract) {
-    const { chatId, caption, mediaType, source, mimeType, filename } = request.all()
+  public async editMessage({ request, response, params }: HttpContextContract) {
+    const clientId = params.clientId;
+    const client = this.botService.clients.get(clientId);
+
+    if (!client) {
+      return response.status(400).json({ status: 'error', error: 'WhatsApp client is not connected or ready' });
+    }
+
+    const { messageId, content, options } = request.only(['messageId', 'content', 'options']);
+
+    if (!messageId || typeof messageId !== 'string') {
+      return response.badRequest({ status: 'error', error: 'messageId is required' });
+    }
+
+    if (!content || typeof content !== 'string') {
+      return response.badRequest({ status: 'error', error: 'content is required' });
+    }
+
     try {
-      const result = await this.botService.sendMedia(params.clientId, chatId, mediaType, source, caption, mimeType, filename)
-      return response.json({ success: true, result })
+      const msg = await client.getMessageById(messageId);
+
+      if (!msg) {
+        return response.status(404).json({ status: 'error', error: 'Message not found' });
+      }
+
+      const edited = await msg.edit(content, options);
+
+      if (!edited) {
+        return response.json({ status: 'ok', success: true, message: null });
+      }
+
+      return response.json({
+        status: 'ok',
+        success: true,
+        message: {
+          id: edited.id?._serialized ?? edited.id,
+          chatId: edited.to,
+          timestamp: edited.timestamp,
+        },
+      });
     } catch (error: any) {
-      return response.status(500).json({ success: false, error: error.message })
+      console.error('Error in editMessage:', error);
+      return response.status(500).json({
+        status: 'error',
+        success: false,
+        error: error.message || 'An error occurred while editing the message',
+      });
     }
   }
 
