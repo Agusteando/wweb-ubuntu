@@ -3,44 +3,71 @@ import { promises as fs, existsSync } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 import SessionManager from 'App/Services/SessionManager'
+import Env from '@ioc:Adonis/Core/Env'
+import * as ts from 'typescript'
 
 export default class CommandRegistry {
   public static handlers: Map<string, any> = new Map()
 
-  private static get commandsDir() {
+  private static get isProduction() {
+    return Env.get('NODE_ENV') === 'production'
+  }
+
+  private static get projectRoot() {
+    const appRoot = Application.appRoot
+    // Resolve project root depending on whether the app is executing from the build directory
+    return path.basename(appRoot) === 'build' ? path.join(appRoot, '..') : appRoot
+  }
+
+  private static get sourceCommandsDir() {
+    return path.join(this.projectRoot, 'app', 'Whatsapp', 'Commands')
+  }
+
+  private static get executableCommandsDir() {
+    // In production, Application.appRoot points to the build directory.
+    // In dev, it points to the repo root.
     return path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
   }
 
   public static async loadCommands() {
     this.handlers.clear()
     
-    const dir = this.commandsDir
-    if (!existsSync(dir)) {
-      await fs.mkdir(dir, { recursive: true })
+    const execDir = this.executableCommandsDir
+    if (!existsSync(execDir)) {
+      await fs.mkdir(execDir, { recursive: true })
     }
 
-    const files = await fs.readdir(dir)
+    const isProd = this.isProduction
+    const files = await fs.readdir(execDir)
     
     for (const file of files) {
-      if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
-        const fullPath = path.join(dir, file)
-        
-        try {
-          const resolvedPath = require.resolve(fullPath)
-          if (require.cache[resolvedPath]) {
-            delete require.cache[resolvedPath]
-          }
-        } catch(e: any) {} 
-        
-        try {
-          const imported = require(fullPath)
-          const handler = imported.default || imported
-          if (handler) {
-            this.handlers.set(file, handler) 
-          }
-        } catch(err) {
-          console.error(`Failed to load module ${file}:`, err)
+      if (isProd) {
+        if (!file.endsWith('.js')) continue
+      } else {
+        if (!file.endsWith('.ts') && !file.endsWith('.js')) continue
+        if (file.endsWith('.d.ts')) continue
+      }
+
+      const fullPath = path.join(execDir, file)
+      
+      try {
+        const resolvedPath = require.resolve(fullPath)
+        if (require.cache[resolvedPath]) {
+          delete require.cache[resolvedPath]
         }
+      } catch(e: any) {} 
+      
+      try {
+        const imported = require(fullPath)
+        const handler = imported.default || imported
+        if (handler) {
+          // Expose stable logical .ts filenames for the registry and UI
+          const logicalName = file.replace(/\.js$/, '.ts')
+          this.handlers.set(logicalName, handler) 
+        }
+      } catch(err) {
+        // Prevent boot crash if a single script has syntax errors
+        console.error(`Failed to load module ${file}:`, err)
       }
     }
     console.log(`Loaded ${this.handlers.size} WhatsApp logic modules from repository.`)
@@ -75,15 +102,45 @@ export default class CommandRegistry {
 
   public static async getFileContent(filename: string): Promise<string> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const fullPath = path.join(this.commandsDir, safePath)
+    const logicalName = safePath.endsWith('.js') ? safePath.replace(/\.js$/, '.ts') : safePath
+    const fullPath = path.join(this.sourceCommandsDir, logicalName)
     if (!existsSync(fullPath)) throw new Error('File not found')
     return await fs.readFile(fullPath, 'utf-8')
   }
 
   public static async saveFileContent(filename: string, content: string): Promise<void> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const fullPath = path.join(this.commandsDir, safePath)
-    await fs.writeFile(fullPath, content, 'utf-8')
+    const logicalName = safePath.endsWith('.js') ? safePath.replace(/\.js$/, '.ts') : safePath
+    const sourcePath = path.join(this.sourceCommandsDir, logicalName)
+
+    if (!existsSync(this.sourceCommandsDir)) {
+      await fs.mkdir(this.sourceCommandsDir, { recursive: true })
+    }
+
+    // Always persist code into the source repository
+    await fs.writeFile(sourcePath, content, 'utf-8')
+
+    // Hot-reload workflow for production: Transpile TS directly into the JS executable path
+    if (this.isProduction) {
+      const jsFilename = logicalName.replace(/\.ts$/, '.js')
+      const execPath = path.join(this.executableCommandsDir, jsFilename)
+      
+      if (!existsSync(this.executableCommandsDir)) {
+        await fs.mkdir(this.executableCommandsDir, { recursive: true })
+      }
+
+      const jsContent = ts.transpileModule(content, {
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+          esModuleInterop: true
+        }
+      }).outputText
+      
+      await fs.writeFile(execPath, jsContent, 'utf-8')
+    }
+
+    // Re-evaluate handlers into memory to apply changes live
     await this.loadCommands()
   }
 
@@ -94,10 +151,12 @@ export default class CommandRegistry {
     if (!commandFiles || commandFiles.length === 0) return
 
     for (const commandFile of commandFiles) {
-      const handlerClass = this.handlers.get(commandFile)
+      const logicalName = commandFile.endsWith('.js') ? commandFile.replace(/\.js$/, '.ts') : commandFile;
+      const handlerClass = this.handlers.get(logicalName)
+      
       if (handlerClass) {
         
-        const rule = rules[commandFile] || { include: [], exclude: [] }
+        const rule = rules[logicalName] || rules[commandFile] || { include: [], exclude: [] }
         
         if (rule.exclude && rule.exclude.includes(message.from)) {
           continue;
@@ -120,7 +179,7 @@ export default class CommandRegistry {
             await handlerClass(message, client, session)
           }
         } catch (err) {
-          console.error(`Error executing handler ${commandFile}:`, err)
+          console.error(`Error executing handler ${logicalName}:`, err)
         }
       }
     }
