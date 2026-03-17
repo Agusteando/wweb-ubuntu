@@ -89,6 +89,17 @@ export default class BotService {
     await fs.writeFile(this.registryFile, JSON.stringify(data, null, 2), 'utf-8')
   }
 
+  // Locates the first available and fully ready client to use as a fallback API client
+  public getAnyReadyClient(): { id: string, client: Client } | null {
+    for (const [id, status] of this.statuses.entries()) {
+      if (status === 'ready') {
+        const client = this.clients.get(id)
+        if (client) return { id, client }
+      }
+    }
+    return null
+  }
+
   public getOrCreateClient(clientId: string): Client {
     if (!this.clients.has(clientId)) this.addClient(clientId)
     return this.clients.get(clientId)!

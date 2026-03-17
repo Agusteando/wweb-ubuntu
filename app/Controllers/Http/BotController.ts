@@ -107,11 +107,22 @@ export default class BotController {
   }
 
   public async sendMessages({ request, response, params }: HttpContextContract) {
-    const clientId = params.clientId;
-    const client = this.botService.clients.get(clientId);
+    let clientId = params.clientId;
+    let client;
 
-    if (!client) {
-      return response.status(400).json({ status: 'error', error: 'WhatsApp client is not connected or ready' });
+    // Stable URL logic: fallback to any active client if specific ID is missing or set to "any"
+    if (!clientId || clientId.toLowerCase() === 'any') {
+      const readyClient = this.botService.getAnyReadyClient();
+      if (!readyClient) {
+        return response.status(400).json({ status: 'error', error: 'No WhatsApp clients are currently connected or ready to handle requests.' });
+      }
+      client = readyClient.client;
+      clientId = readyClient.id;
+    } else {
+      client = this.botService.clients.get(clientId);
+      if (!client || this.botService.statuses.get(clientId) !== 'ready') {
+        return response.status(400).json({ status: 'error', error: `WhatsApp client '${clientId}' is not connected or ready.` });
+      }
     }
 
     let {
@@ -225,6 +236,7 @@ export default class BotController {
       return response.json({
         status: 'ok',
         success: true,
+        clientUsed: clientId,
         messages: sentMessages,
       });
     } catch (error: any) {
@@ -242,11 +254,22 @@ export default class BotController {
   }
 
   public async editMessage({ request, response, params }: HttpContextContract) {
-    const clientId = params.clientId;
-    const client = this.botService.clients.get(clientId);
+    let clientId = params.clientId;
+    let client;
 
-    if (!client) {
-      return response.status(400).json({ status: 'error', error: 'WhatsApp client is not connected or ready' });
+    // Stable URL logic: fallback to any active client if specific ID is missing or set to "any"
+    if (!clientId || clientId.toLowerCase() === 'any') {
+      const readyClient = this.botService.getAnyReadyClient();
+      if (!readyClient) {
+        return response.status(400).json({ status: 'error', error: 'No WhatsApp clients are currently connected or ready to handle requests.' });
+      }
+      client = readyClient.client;
+      clientId = readyClient.id;
+    } else {
+      client = this.botService.clients.get(clientId);
+      if (!client || this.botService.statuses.get(clientId) !== 'ready') {
+        return response.status(400).json({ status: 'error', error: `WhatsApp client '${clientId}' is not connected or ready.` });
+      }
     }
 
     const { messageId, content, options } = request.only(['messageId', 'content', 'options']);
@@ -275,6 +298,7 @@ export default class BotController {
       return response.json({
         status: 'ok',
         success: true,
+        clientUsed: clientId,
         message: {
           id: edited.id?._serialized ?? edited.id,
           chatId: edited.to,

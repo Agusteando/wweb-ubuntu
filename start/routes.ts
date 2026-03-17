@@ -24,13 +24,29 @@ Route.group(() => {
 
 }).middleware('auth') // Applying Native Browser Protection
 
-// API Routes
+// ==========================================
+// PUBLIC STABLE & DYNAMIC API ENDPOINTS
+// ==========================================
+
+// Stable Generic URLs - Routes to ANY available connected client automatically
+Route.post('/whatsapp-manager/api/send', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/api/edit', 'BotController.editMessage')
+
+// Explicit "any" fallback routes (behaves identically to above)
+Route.post('/whatsapp-manager/bot/send/any', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/api/send/any', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/bot/edit/any', 'BotController.editMessage')
+Route.post('/whatsapp-manager/api/edit/any', 'BotController.editMessage')
+
+// Targeted Client URLs - Only uses the specified exact Client
 Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessages')
 
 Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessage')
 Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
 
-// Keep legacy media endpoints aliased to the new robust handler
+// Keep legacy media endpoints aliased to the new robust handler (both generic and targeted)
+Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessages')
+Route.post('/whatsapp-manager/api/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media/:clientId', 'BotController.sendMessages')

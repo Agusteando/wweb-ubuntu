@@ -1,4 +1,4 @@
-console.log('✅ Bot Manager v3.2 Initialized');
+console.log('✅ Bot Manager v3.3 Initialized');
 
 document.addEventListener('DOMContentLoaded', () => {
   const state = {
@@ -264,6 +264,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (action === 'toggle-api-docs') {
         const panel = document.getElementById(`api-docs-${actionBtn.dataset.client}`);
+        if (panel) {
+          panel.classList.toggle('hidden');
+          if (!panel.dataset.urlSet) {
+            const baseUrl = window.location.origin;
+            panel.querySelectorAll('.api-base-url').forEach(el => el.textContent = baseUrl);
+            panel.dataset.urlSet = 'true';
+          }
+        }
+      }
+      
+      if (action === 'toggle-global-api-docs') {
+        const panel = document.getElementById('global-api-docs');
         if (panel) {
           panel.classList.toggle('hidden');
           if (!panel.dataset.urlSet) {
