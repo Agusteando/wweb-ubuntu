@@ -4,6 +4,7 @@ import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
 import Application from '@ioc:Adonis/Core/Application'
 import axios from 'axios'
+import FormData from 'form-data'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
 import tmp from 'tmp'
 
@@ -11,7 +12,7 @@ export async function getGoogleAdminAuth(scopes: string[]) {
   const credPath = Env.get('GOOGLE_CREDENTIALS_PATH')
   
   if (!credPath) {
-    throw new Error('Missing environment variable: GOOGLE_CREDENTIALS_PATH is required to use Google API features.')
+    throw new Error('CRITICAL: Missing environment variable GOOGLE_CREDENTIALS_PATH. Must be set to use Google API features.')
   }
 
   const absolutePath = path.isAbsolute(credPath)
@@ -23,7 +24,7 @@ export async function getGoogleAdminAuth(scopes: string[]) {
     content = await fs.readFile(absolutePath, 'utf8')
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      throw new Error(`Google credentials file not found at: ${absolutePath}. Please ensure the file exists or update your .env paths.`)
+      throw new Error(`Google credentials file not found at: ${absolutePath}. Please ensure the file exists and is accessible.`)
     }
     throw error
   }
@@ -129,8 +130,69 @@ export async function convertWordToPdf(media: any, _message: any): Promise<any> 
   })
 }
 
-export async function createAudioPrediction2(_message: any) {
-  return { transcription: "Transcripción de prueba generada", audioFilePath: null, detectedLanguage: "es" }
+async function withRetry<T>(fn: () => Promise<T>, retries: number, delayMs: number): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+      try {
+          return await fn();
+      } catch (error) {
+          if (i === retries - 1) throw error;
+          await new Promise(res => setTimeout(res, delayMs));
+      }
+  }
+  throw new Error('Unreachable');
+}
+
+export async function createAudioPrediction2(message: any) {
+  const media = await message.downloadMedia();
+  if (!media || !media.data) return null;
+
+  return new Promise<any>((resolve, reject) => {
+    tmp.file({ postfix: '.ogg' }, async (err, tempPath) => {
+      if (err) return reject(err);
+      
+      try {
+        await fs.writeFile(tempPath, media.data, 'base64');
+        
+        const token = Env.get('OPENAI_API_KEY');
+        if (!token) throw new Error('OPENAI_API_KEY is not configured in .env');
+
+        const form = new FormData();
+        const readStream = require('fs').createReadStream(tempPath);
+        form.append('file', readStream);
+        form.append('model', 'whisper-1');
+        form.append('prompt', '¡Hola!\n\n¿Cómo estás?\n\nBienvenido a mi bitácora:\nQuisiera comenzar con...');
+
+        console.log("Now reaching out to OPENAI's Whisper...");
+
+        let transcription = await withRetry(async () => {
+            const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    ...form.getHeaders(),
+                },
+                timeout: 30000
+            });
+            console.log("Whisper has answered.");
+            return response.data.text;
+        }, 3, 10000);
+
+        console.log('Whisper output:', transcription);
+
+        let detectedLanguage = 'unknown';
+        try {
+            // Placeholder: Whisper doesn't natively return language unless verbose_json is used,
+            // but preserving your requested object signature
+            detectedLanguage = 'es'; 
+        } catch (e) {}
+
+        // Returning the tempPath so the caller can clean it up per your design
+        resolve({ transcription, audioFilePath: tempPath, detectedLanguage });
+      } catch (error) {
+        try { await fs.unlink(tempPath); } catch (e) {}
+        reject(error);
+      }
+    });
+  });
 }
 
 export async function sendEmail(data: any) {

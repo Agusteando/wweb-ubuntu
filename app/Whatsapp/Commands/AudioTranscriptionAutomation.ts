@@ -5,7 +5,7 @@ import fs from 'fs'
 
 export default class AudioTranscriptionAutomation {
   public type = 'Automation'
-  public instructions = 'Transcribes PTT/Audio messages for configured groups or DMs'
+  public instructions = 'Transcribes PTT/Audio messages using OpenAI Whisper for configured groups or DMs'
 
   private preventUnwanted = false;
   private botIsReplying = false;
@@ -27,7 +27,7 @@ export default class AudioTranscriptionAutomation {
                 }
             }
         } catch (err: any) {
-            console.error('Error while processing the audio message:', err);
+            console.error('Error while processing the audio message with Whisper:', err);
         }
     }
   }
