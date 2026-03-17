@@ -27,9 +27,10 @@ export default class BotService {
     this.dataDir = Env.get('WA_SESSION_DIR')
     
     if (!this.dataDir) {
-      throw new Error('CRITICAL: WA_SESSION_DIR environment variable is missing.')
+      throw new Error('CRITICAL: WA_SESSION_DIR environment variable is missing. It must be set to an absolute external path.')
     }
 
+    // Fully isolated external paths
     this.authDir = path.join(this.dataDir, 'auth')
     this.registryFile = path.join(this.dataDir, 'clients.json')
   }
@@ -54,7 +55,7 @@ export default class BotService {
         this.addClient(clientId, false)
       }
     } catch (e: any) {
-      // Registry missing on first boot, safe to ignore.
+      // First run: Registry does not exist yet. No action needed.
     }
   }
 

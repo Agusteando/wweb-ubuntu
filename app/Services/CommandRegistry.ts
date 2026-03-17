@@ -3,91 +3,47 @@ import { promises as fs, existsSync } from 'fs'
 import path from 'path'
 import Application from '@ioc:Adonis/Core/Application'
 import SessionManager from 'App/Services/SessionManager'
-import Env from '@ioc:Adonis/Core/Env'
-import * as ts from 'typescript'
 
 export default class CommandRegistry {
   public static handlers: Map<string, any> = new Map()
 
-  private static get customScriptsDir() {
-    const baseDir = Env.get('WA_SESSION_DIR')
-    if (!baseDir) {
-      throw new Error('CRITICAL: WA_SESSION_DIR environment variable is missing.')
-    }
-    return path.join(baseDir, 'scripts')
-  }
-
-  private static get coreScriptsDir() {
+  private static get commandsDir() {
     return path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
   }
 
   public static async loadCommands() {
     this.handlers.clear()
     
-    const coreDir = this.coreScriptsDir
-    const customDir = this.customScriptsDir
-    
-    await fs.mkdir(customDir, { recursive: true })
+    const dir = this.commandsDir
+    if (!existsSync(dir)) {
+      await fs.mkdir(dir, { recursive: true })
+    }
 
-    // 1. Load Core Scripts (Git Source of Truth)
-    if (existsSync(coreDir)) {
-      const coreFiles = await fs.readdir(coreDir)
-      for (const file of coreFiles) {
-        if (file.endsWith('.ts') && !file.endsWith('.d.ts')) {
-          await this.compileAndLoad(coreDir, file, true)
+    const files = await fs.readdir(dir)
+    
+    for (const file of files) {
+      if ((file.endsWith('.ts') || file.endsWith('.js')) && !file.endsWith('.d.ts')) {
+        const fullPath = path.join(dir, file)
+        
+        try {
+          const resolvedPath = require.resolve(fullPath)
+          if (require.cache[resolvedPath]) {
+            delete require.cache[resolvedPath]
+          }
+        } catch(e: any) {} 
+        
+        try {
+          const imported = require(fullPath)
+          const handler = imported.default || imported
+          if (handler) {
+            this.handlers.set(file, handler) 
+          }
+        } catch(err) {
+          console.error(`Failed to load module ${file}:`, err)
         }
       }
     }
-
-    // 2. Load Custom Scripts / Overrides (External UI Edits)
-    const customFiles = await fs.readdir(customDir)
-    for (const file of customFiles) {
-      if (file.endsWith('.ts') && !file.endsWith('.d.ts')) {
-        await this.compileAndLoad(customDir, file, false)
-      }
-    }
-
-    console.log(`Loaded ${this.handlers.size} WhatsApp logic modules.`)
-  }
-
-  private static async compileAndLoad(dir: string, file: string, isCore: boolean) {
-    const tsPath = path.join(dir, file)
-    const jsFilename = file.replace(/\.ts$/, '.js')
-    
-    // Core files can be compiled locally in temp or executed directly if building, 
-    // but transpile dynamically to ensure consistency
-    const tempOutputDir = path.join(this.customScriptsDir, '.cache')
-    if (!existsSync(tempOutputDir)) await fs.mkdir(tempOutputDir, { recursive: true })
-    
-    const jsPath = path.join(tempOutputDir, jsFilename)
-    
-    try {
-      const tsContent = await fs.readFile(tsPath, 'utf-8')
-      const jsContent = ts.transpileModule(tsContent, {
-        compilerOptions: {
-          module: ts.ModuleKind.CommonJS,
-          target: ts.ScriptTarget.ES2022,
-          esModuleInterop: true
-        }
-      }).outputText
-      
-      await fs.writeFile(jsPath, jsContent, 'utf-8')
-      
-      try {
-        const resolvedPath = require.resolve(jsPath)
-        if (require.cache[resolvedPath]) {
-          delete require.cache[resolvedPath]
-        }
-      } catch(e: any) {} 
-      
-      const imported = require(jsPath)
-      const handler = imported.default || imported
-      if (handler) {
-        this.handlers.set(file, handler) 
-      }
-    } catch (err) {
-      console.error(`Failed to load ${isCore ? 'core' : 'custom'} module ${file}:`, err)
-    }
+    console.log(`Loaded ${this.handlers.size} WhatsApp logic modules from repository.`)
   }
 
   public static getAvailableFiles(): string[] {
@@ -119,23 +75,14 @@ export default class CommandRegistry {
 
   public static async getFileContent(filename: string): Promise<string> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    
-    // Check custom overrides first
-    const customPath = path.join(this.customScriptsDir, safePath)
-    if (existsSync(customPath)) return await fs.readFile(customPath, 'utf-8')
-    
-    // Fallback to core source of truth
-    const corePath = path.join(this.coreScriptsDir, safePath)
-    if (existsSync(corePath)) return await fs.readFile(corePath, 'utf-8')
-
-    throw new Error('File not found in core or custom directories')
+    const fullPath = path.join(this.commandsDir, safePath)
+    if (!existsSync(fullPath)) throw new Error('File not found')
+    return await fs.readFile(fullPath, 'utf-8')
   }
 
   public static async saveFileContent(filename: string, content: string): Promise<void> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const fullPath = path.join(this.customScriptsDir, safePath)
-    
-    // Always save edits to the custom directory so Git tracking isn't disrupted
+    const fullPath = path.join(this.commandsDir, safePath)
     await fs.writeFile(fullPath, content, 'utf-8')
     await this.loadCommands()
   }
