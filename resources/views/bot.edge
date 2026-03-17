@@ -11,7 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
-  <script src="/whatsapp-manager/resources/js/bot.js?v=3.1.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=3.2.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -23,6 +23,12 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    
     [x-cloak] { display: none !important; }
   </style>
 </head>
@@ -120,14 +126,18 @@
                 </div>
               </div>
 
-              <div class="bg-slate-50 p-4 border-t border-slate-200 grid grid-cols-2 gap-3 shrink-0">
-                <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-xl font-medium text-sm transition-all shadow-sm flex justify-center items-center">
-                  <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+              <div class="bg-slate-50 p-3 border-t border-slate-200 grid grid-cols-3 gap-2 shrink-0">
+                <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg font-medium text-xs transition-all shadow-sm flex justify-center items-center">
+                  <svg class="w-3.5 h-3.5 mr-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
                   Test MSG
+                </button>
+                <button data-action="toggle-api-docs" data-client="{{ client.clientId }}" class="py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg font-medium text-xs transition-all shadow-sm flex justify-center items-center">
+                  <svg class="w-3.5 h-3.5 mr-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                  API Docs
                 </button>
                 <form action="/whatsapp-manager/bot/remove" method="POST" class="w-full">
                   <input type="hidden" name="clientId" value="{{ client.clientId }}" />
-                  <button type="submit" class="w-full py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl font-medium text-sm transition-all shadow-sm">Terminate</button>
+                  <button type="submit" class="w-full py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium text-xs transition-all shadow-sm">Terminate</button>
                 </form>
               </div>
               
@@ -137,6 +147,118 @@
                   <input type="text" name="message" placeholder="Type your message..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" required />
                   <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm flex justify-center items-center">Send Now</button>
                 </form>
+              </div>
+
+              <!-- Public API Docs Section -->
+              <div id="api-docs-{{ client.clientId }}" class="hidden p-5 bg-slate-900 border-t border-slate-800 shrink-0 overflow-y-auto max-h-[400px] custom-scrollbar">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-2">
+                  <h4 class="font-bold text-white text-base flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    Public API
+                  </h4>
+                  <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded">{{ client.clientId }}</span>
+                </div>
+
+                <div class="space-y-6 font-sans text-sm text-slate-300">
+                  <div>
+                    <p class="mb-2 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Base Endpoint</p>
+                    <div class="bg-black/50 border border-slate-700 rounded-lg p-3 font-mono text-xs flex items-center overflow-x-auto">
+                      <span class="text-emerald-400 font-bold mr-2">POST</span>
+                      <span class="text-slate-200"><span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Text Msg -->
+                  <div>
+                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">1</span> Send Text Message</p>
+                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chatId": "1234567890@c.us",
+    "message": "Hello from API!"
+  }'</pre>
+                  </div>
+
+                  <!-- Media URL -->
+                  <div>
+                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">2</span> Send Media (via URL)</p>
+                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chatId": "1234567890@c.us",
+    "filepath": "https://example.com/image.jpg",
+    "caption": "Check out this image!"
+  }'</pre>
+                  </div>
+
+                  <!-- File Upload -->
+                  <div>
+                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">3</span> Upload Local File (Document/Image)</p>
+                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
+  -F "chatId=1234567890@c.us" \
+  -F "caption=Here is the document" \
+  -F "file=@/path/to/local/file.pdf"</pre>
+                  </div>
+
+                  <!-- Voice Note -->
+                  <div>
+                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">4</span> Send Voice Note (Audio)</p>
+                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
+  -F "chatId=1234567890@c.us" \
+  -F "audio=true" \
+  -F "file=@/path/to/voice.ogg"</pre>
+                  </div>
+
+                  <!-- Edit Message -->
+                  <div>
+                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">5</span> Edit Sent Message</p>
+                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/edit/{{ client.clientId }} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messageId": "true_1234567890@c.us_ABCDEF1234567890",
+    "content": "Updated text content!"
+  }'</pre>
+                  </div>
+
+                  <!-- Params Table -->
+                  <div class="mt-6">
+                    <p class="font-bold text-slate-200 mb-3 border-b border-slate-700 pb-2 text-sm">Payload Parameters</p>
+                    <ul class="space-y-3">
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">chatId</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String | Array)</span> Target WhatsApp ID(s). Example: <code>123456789@c.us</code> (Direct) or <code>1234@g.us</code> (Group).</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">message</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> Text content of the message.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">caption</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> Text attached to media messages.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">filepath</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> A public URL or absolute local path to an image, video, audio, or document.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">file</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(File)</span> Upload a file using <code>multipart/form-data</code>.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">audio</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Boolean)</span> Set to <code>true</code> to send audio as a playable Voice Note instead of a file.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">mentions</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Array)</span> List of phone numbers (without <code>@c.us</code>) to ping in the message.</span>
+                      </li>
+                      <li class="flex items-start">
+                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">options</code>
+                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Object)</span> Advanced configurations matching <code>whatsapp-web.js MessageSendOptions</code>.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
 
             </div>

@@ -1,4 +1,4 @@
-console.log('✅ Bot Manager v3.0 Initialized');
+console.log('✅ Bot Manager v3.2 Initialized');
 
 document.addEventListener('DOMContentLoaded', () => {
   const state = {
@@ -139,7 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 300);
   }
 
-  // New function for Rules Config Modal
   async function openRulesModal(clientId, commandFile, commandRulesData) {
     state.currentConfigClient = clientId;
     state.currentConfigCommand = commandFile;
@@ -223,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
       listContainer.innerHTML += renderChatType('Groups (Blocked by Default)', 'Check "Include" to allow this automation to trigger in specific groups.', groups);
       listContainer.innerHTML += renderChatType('Direct Messages (Allowed by Default)', 'Check "Exclude" to block specific users from triggering this logic.', direct);
 
-      // Add mutual exclusion logic
       listContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.addEventListener('change', function() {
           if (this.checked) {
@@ -258,10 +256,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (actionBtn) {
       const action = actionBtn.dataset.action;
       if (action === 'switch-tab') switchTab(actionBtn.dataset.target);
+      
       if (action === 'toggle-actions') {
         const panel = document.getElementById(`actions-${actionBtn.dataset.client}`);
         if (panel) panel.classList.toggle('hidden');
       }
+
+      if (action === 'toggle-api-docs') {
+        const panel = document.getElementById(`api-docs-${actionBtn.dataset.client}`);
+        if (panel) {
+          panel.classList.toggle('hidden');
+          if (!panel.dataset.urlSet) {
+            const baseUrl = window.location.origin;
+            panel.querySelectorAll('.api-base-url').forEach(el => el.textContent = baseUrl);
+            panel.dataset.urlSet = 'true';
+          }
+        }
+      }
+
       if (action === 'open-modal') {
         const commands = JSON.parse(actionBtn.dataset.commands || '[]');
         openModal(actionBtn.dataset.client, commands);
