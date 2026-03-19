@@ -10,11 +10,18 @@ export interface ClientConfig {
   commandRules?: Record<string, { include: string[], exclude: string[] }>;
 }
 
+export interface ClientHealth {
+  failedProbes: number;
+  isRecovering: boolean;
+  lastRecoveryAttempt: number;
+}
+
 export default class BotService {
   public clients: Map<string, Client> = new Map()
   public qrCodes: Map<string, string | null> = new Map()
   public statuses: Map<string, 'pending' | 'ready' | 'error'> = new Map()
   public configs: Map<string, ClientConfig> = new Map()
+  public healthData: Map<string, ClientHealth> = new Map()
   
   private dataDir: string
   private authDir: string
@@ -22,6 +29,7 @@ export default class BotService {
   
   private isShuttingDown: boolean = false
   private initLocks: Set<string> = new Set()
+  private supervisorInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.dataDir = Env.get('WA_SESSION_DIR')
@@ -57,10 +65,18 @@ export default class BotService {
     } catch (e: any) {
       // First run: Registry does not exist yet. No action needed.
     }
+
+    // Begin the background health supervisor
+    this.supervisorInterval = setInterval(() => this.runHealthChecks(), 60000)
   }
 
   public async shutdown() {
     this.isShuttingDown = true
+    if (this.supervisorInterval) {
+      clearInterval(this.supervisorInterval)
+      this.supervisorInterval = null
+    }
+
     const destructionPromises: Promise<void>[] = []
     
     for (const [clientId, client] of this.clients.entries()) {
@@ -117,6 +133,14 @@ export default class BotService {
       this.saveRegistry()
     }
 
+    if (!this.healthData.has(clientId)) {
+      this.healthData.set(clientId, {
+        failedProbes: 0,
+        isRecovering: false,
+        lastRecoveryAttempt: 0
+      })
+    }
+
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: this.authDir }),
       puppeteer: { 
@@ -134,26 +158,40 @@ export default class BotService {
     this.qrCodes.set(clientId, null)
     this.statuses.set(clientId, 'pending')
 
-    client.on('qr', (qr) => { this.qrCodes.set(clientId, qr); this.statuses.set(clientId, 'pending') })
-    client.on('ready', () => { this.qrCodes.set(clientId, null); this.statuses.set(clientId, 'ready') })
-    client.on('auth_failure', () => this.statuses.set(clientId, 'error'))
+    client.on('qr', (qr) => { 
+      this.qrCodes.set(clientId, qr)
+      this.statuses.set(clientId, 'pending') 
+    })
+    
+    client.on('ready', () => { 
+      this.qrCodes.set(clientId, null)
+      this.statuses.set(clientId, 'ready')
+      const health = this.healthData.get(clientId)
+      if (health) {
+        health.failedProbes = 0
+        health.isRecovering = false
+      }
+      console.log(`[${clientId}] Client is healthy and ready.`)
+    })
+    
+    client.on('auth_failure', (msg) => {
+      console.error(`[${clientId}] Authentication failed. Hard failure: ${msg}`)
+      this.statuses.set(clientId, 'error')
+      const health = this.healthData.get(clientId)
+      if (health) health.failedProbes = 0 // Stop probing, needs manual intervention
+    })
     
     client.on('disconnected', async (reason) => { 
       console.log(`[${clientId}] Client disconnected. Reason: ${reason}`)
-      this.statuses.set(clientId, 'pending')
-      
       if (!this.isShuttingDown) {
-        await client.destroy().catch(() => {})
-        this.clients.delete(clientId)
-        setTimeout(() => {
-          if (!this.isShuttingDown) this.addClient(clientId, false)
-        }, 5000)
+        this.recoverClient(clientId, `Disconnected (${reason})`)
       }
     })
 
     client.on('message', async (msg) => { 
       if (!msg.fromMe) await this.handleMessage(clientId, msg, client) 
     })
+    
     client.on('message_create', async (msg) => { 
       if (msg.fromMe) await this.handleMessage(clientId, msg, client) 
     })
@@ -218,10 +256,113 @@ export default class BotService {
     this.qrCodes.delete(clientId)
     this.statuses.delete(clientId)
     this.configs.delete(clientId)
+    this.healthData.delete(clientId)
     await this.saveRegistry()
     
     try {
       await fs.rm(path.join(this.authDir, `session-${clientId}`), { recursive: true, force: true })
     } catch (e: any) {}
+  }
+
+  /* 
+  |--------------------------------------------------------------------------
+  | Health Supervision & Recovery Routine
+  |--------------------------------------------------------------------------
+  */
+
+  private runHealthChecks() {
+    if (this.isShuttingDown) return
+    for (const [clientId, client] of this.clients.entries()) {
+      // Fire and forget so one hanging client does not block others
+      this.checkClientHealth(clientId, client).catch(err => {
+        console.error(`[${clientId}] Unexpected error in health check:`, err)
+      })
+    }
+  }
+
+  private async checkClientHealth(clientId: string, client: Client) {
+    if (this.statuses.get(clientId) !== 'ready') return
+    
+    const health = this.healthData.get(clientId)
+    if (!health || health.isRecovering) return
+
+    try {
+      // Attempt to retrieve state, forcing a resolution within 15s if Puppeteer hangs
+      const state = await Promise.race([
+        client.getState(),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000))
+      ])
+
+      if (state === 'CONNECTED') {
+        if (health.failedProbes > 0) {
+          console.log(`[${clientId}] Health recovered naturally. State: ${state}`)
+        }
+        health.failedProbes = 0
+      } else if (state === 'UNPAIRED' || state === 'UNPAIRED_IDLE') {
+        console.error(`[${clientId}] Client is unpaired. Hard failure.`)
+        this.statuses.set(clientId, 'error')
+        health.failedProbes = 0 // Device was unlinked; Do not attempt automated recovery
+      } else {
+        console.warn(`[${clientId}] Client degraded. State: ${state}`)
+        health.failedProbes++
+      }
+    } catch (error: any) {
+      console.warn(`[${clientId}] Health probe failed (${health.failedProbes + 1}/3): ${error.message}`)
+      health.failedProbes++
+    }
+
+    if (health.failedProbes >= 3 && !health.isRecovering) {
+      this.recoverClient(clientId, 'Stale/Unresponsive (3 consecutive probe failures)')
+    }
+  }
+
+  private async recoverClient(clientId: string, reason: string) {
+    const health = this.healthData.get(clientId)
+    if (!health) return
+
+    if (health.isRecovering) return
+
+    const now = Date.now()
+    let delayBeforeRestart = 5000
+
+    // Detect if we are churning (multiple restarts within 2 minutes)
+    if (now - health.lastRecoveryAttempt < 2 * 60 * 1000) {
+      console.warn(`[${clientId}] Recovery churn detected. Engaging 60s backoff.`)
+      delayBeforeRestart = 60000
+    }
+
+    health.isRecovering = true
+    health.lastRecoveryAttempt = now
+    health.failedProbes = 0
+
+    console.log(`[${clientId}] Initiating targeted recovery. Reason: ${reason}`)
+    this.statuses.set(clientId, 'pending') // Triggers "Starting Engine..." in frontend
+
+    const client = this.clients.get(clientId)
+    if (client) {
+      try {
+        await Promise.race([
+          client.destroy(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Destroy timeout')), 10000))
+        ])
+        console.log(`[${clientId}] Client destroyed successfully for recovery.`)
+      } catch (err: any) {
+        console.error(`[${clientId}] Error destroying client during recovery:`, err.message)
+      }
+    }
+    
+    // Completely clear out of memory references
+    this.clients.delete(clientId)
+    this.initLocks.delete(clientId)
+
+    // Wait before breathing life back into the container
+    setTimeout(() => {
+      // Ensure it wasn't intentionally removed by the UI while it was delayed
+      if (!this.isShuttingDown && this.configs.has(clientId)) {
+        console.log(`[${clientId}] Restarting client instance post-recovery...`)
+        health.isRecovering = false
+        this.addClient(clientId, false)
+      }
+    }, delayBeforeRestart)
   }
 }
