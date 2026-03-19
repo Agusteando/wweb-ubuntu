@@ -22,30 +22,33 @@ Route.group(() => {
   Route.get('/whatsapp-manager/api/chats/:clientId', 'BotController.getChats')
   Route.post('/whatsapp-manager/api/rules/:clientId', 'BotController.saveRules')
 
+  // Scheduling & Planner Routes
+  Route.get('/whatsapp-manager/api/schedules/:clientId', 'BotController.getSchedules')
+  Route.post('/whatsapp-manager/api/schedules/:clientId', 'BotController.createSchedule')
+  Route.put('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.updateSchedule')
+  Route.delete('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.deleteSchedule')
+  Route.post('/whatsapp-manager/api/schedules/:clientId/bulk', 'BotController.bulkImportSchedules')
+
 }).middleware('auth') // Applying Native Browser Protection
 
 // ==========================================
 // PUBLIC STABLE & DYNAMIC API ENDPOINTS
 // ==========================================
 
-// Stable Generic URLs - Routes to ANY available connected client automatically
 Route.post('/whatsapp-manager/api/send', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/edit', 'BotController.editMessage')
 
-// Explicit "any" fallback routes (behaves identically to above)
 Route.post('/whatsapp-manager/bot/send/any', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/any', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/bot/edit/any', 'BotController.editMessage')
 Route.post('/whatsapp-manager/api/edit/any', 'BotController.editMessage')
 
-// Targeted Client URLs - Only uses the specified exact Client
 Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessages')
 
 Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessage')
 Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
 
-// Keep legacy media endpoints aliased to the new robust handler (both generic and targeted)
 Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessages')

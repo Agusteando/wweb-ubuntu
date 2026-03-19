@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WhatsApp Bot & Automation Manager</title>
+  <title>WhatsApp Orchestrator & Manager</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +11,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
-  <script src="/whatsapp-manager/resources/js/bot.js?v=3.3.0" defer></script>
+  
+  <!-- Bundled FullCalendar Core -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  
+  <script src="/whatsapp-manager/resources/js/bot.js?v=4.0.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -23,20 +27,25 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     
-    [x-cloak] { display: none !important; }
+    /* FullCalendar Overrides for low-contrast elegant UI */
+    .fc { font-family: inherit !important; }
+    .fc .fc-toolbar-title { font-size: 1.15rem !important; font-weight: 700; color: #1e293b; }
+    .fc-theme-standard td, .fc-theme-standard th { border-color: #e2e8f0; }
+    .fc-event { border: none !important; border-radius: 4px; padding: 2px 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .fc-event:hover { opacity: 0.9; }
+    .fc-button-primary { background-color: #ffffff !important; border-color: #cbd5e1 !important; color: #475569 !important; font-weight: 600 !important; font-size: 0.85rem !important; text-transform: capitalize !important; box-shadow: none !important; }
+    .fc-button-primary:hover { background-color: #f8fafc !important; color: #1e293b !important; }
+    .fc-button-primary:not(:disabled).fc-button-active { background-color: #f1f5f9 !important; color: #0f172a !important; border-color: #94a3b8 !important; }
   </style>
 </head>
 <body class="text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
 
-  <!-- Injecting Advanced Data Schema -->
   <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}" data-modules="{{ modulesMetadataJson }}"></div>
-
   <div id="toast-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
 
   <nav class="bg-slate-900 shadow-lg text-white shrink-0 relative z-10">
@@ -51,14 +60,17 @@
         <div class="flex items-center space-x-2">
           <button data-action="switch-tab" data-target="clients" id="tab-clients-btn" class="px-4 py-2 rounded-md font-medium text-sm bg-indigo-600 text-white shadow-inner transition-all">Instances</button>
           <button data-action="switch-tab" data-target="editor" id="tab-editor-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Logic Editor</button>
+          <button data-action="switch-tab" data-target="planner" id="tab-planner-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Content Planner</button>
         </div>
       </div>
     </div>
   </nav>
 
+  <!-- ===============================
+       TAB: CLIENTS
+       =============================== -->
   <main id="tab-clients" class="flex-grow overflow-y-auto w-full bg-slate-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-shadow">
         <div>
           <h2 class="text-xl font-bold text-slate-800 tracking-tight flex items-center">
@@ -79,77 +91,6 @@
         </form>
       </div>
 
-      <!-- Stable Global API Docs Section (Hidden by default) -->
-      <div id="global-api-docs" class="hidden bg-slate-900 rounded-2xl shadow-xl mb-8 border border-slate-800 shrink-0 overflow-hidden relative">
-        <div class="p-5 flex items-center justify-between border-b border-slate-800 bg-slate-800/50">
-          <div class="flex items-center">
-            <div class="p-2 bg-emerald-500/20 rounded-lg mr-3">
-              <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            </div>
-            <div>
-              <h4 class="font-bold text-white text-base">Stable Global API Integration</h4>
-              <p class="text-xs text-slate-400 mt-0.5">URLs that fallback automatically to <span class="text-emerald-400 font-semibold">ANY</span> available connected client. Guaranteed delivery.</p>
-            </div>
-          </div>
-          <button data-action="toggle-global-api-docs" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full p-2 transition-colors">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          </button>
-        </div>
-
-        <div class="p-6 space-y-6 font-sans text-sm text-slate-300">
-          <div>
-            <p class="mb-2 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Stable Base Endpoint</p>
-            <div class="bg-black/50 border border-slate-700 rounded-lg p-3 font-mono text-xs flex items-center overflow-x-auto">
-              <span class="text-emerald-400 font-bold mr-2">POST</span>
-              <span class="text-slate-200"><span class="api-base-url"></span>/whatsapp-manager/api/send</span>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Text Msg -->
-            <div>
-              <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-emerald-400">1</span> Send Text Message</p>
-              <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chatId": "1234567890@c.us",
-    "message": "Hello from Global API!"
-  }'</pre>
-            </div>
-
-            <!-- Media URL -->
-            <div>
-              <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-emerald-400">2</span> Send Media (via URL)</p>
-              <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chatId": "1234567890@c.us",
-    "filepath": "https://example.com/image.jpg",
-    "caption": "Check out this image!"
-  }'</pre>
-            </div>
-            
-            <!-- File Upload -->
-            <div>
-              <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-emerald-400">3</span> Upload Local File (Document/Image)</p>
-              <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send \
-  -F "chatId=1234567890@c.us" \
-  -F "caption=Here is the document" \
-  -F "file=@/path/to/local/file.pdf"</pre>
-            </div>
-            
-            <!-- Voice Note -->
-            <div>
-              <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-emerald-400">4</span> Send Voice Note (Audio)</p>
-              <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send \
-  -F "chatId=1234567890@c.us" \
-  -F "audio=true" \
-  -F "file=@/path/to/voice.ogg"</pre>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="client-list">
         @if(!clients || clients.length === 0)
           <div class="col-span-full flex flex-col items-center justify-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
@@ -162,7 +103,6 @@
         @else
           @each(client in clients)
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-lg" id="client-{{ client.clientId }}">
-              
               <div class="p-6 flex-grow">
                 <div class="flex justify-between items-start mb-5">
                   <h3 class="font-bold text-lg text-slate-800 truncate pr-3" title="{{ client.clientId }}">{{ client.clientId }}</h3>
@@ -181,7 +121,6 @@
                 <div class="border-t border-slate-100 pt-4">
                   <div class="flex justify-between items-center mb-3">
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center">
-                      <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
                       Logic Modules
                     </p>
                     <button data-action="open-modal" data-client="{{ client.clientId }}" data-commands="{{ JSON.stringify(client.commandFiles) }}" class="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors">Assign</button>
@@ -202,16 +141,8 @@
                   </div>
                 </div>
               </div>
-
-              <div class="bg-slate-50 p-3 border-t border-slate-200 grid grid-cols-3 gap-2 shrink-0">
-                <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg font-medium text-xs transition-all shadow-sm flex justify-center items-center">
-                  <svg class="w-3.5 h-3.5 mr-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-                  Test MSG
-                </button>
-                <button data-action="toggle-api-docs" data-client="{{ client.clientId }}" class="py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg font-medium text-xs transition-all shadow-sm flex justify-center items-center">
-                  <svg class="w-3.5 h-3.5 mr-1 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                  API Docs
-                </button>
+              <div class="bg-slate-50 p-3 border-t border-slate-200 grid grid-cols-2 gap-2 shrink-0">
+                <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg font-medium text-xs transition-all shadow-sm">Test MSG</button>
                 <form action="/whatsapp-manager/bot/remove" method="POST" class="w-full">
                   <input type="hidden" name="clientId" value="{{ client.clientId }}" />
                   <button type="submit" class="w-full py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg font-medium text-xs transition-all shadow-sm">Terminate</button>
@@ -225,119 +156,6 @@
                   <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm flex justify-center items-center">Send Now</button>
                 </form>
               </div>
-
-              <!-- Public Target API Docs Section -->
-              <div id="api-docs-{{ client.clientId }}" class="hidden p-5 bg-slate-900 border-t border-slate-800 shrink-0 overflow-y-auto max-h-[400px] custom-scrollbar">
-                <div class="flex items-center justify-between mb-4 border-b border-slate-700 pb-2">
-                  <h4 class="font-bold text-white text-base flex items-center">
-                    <svg class="w-5 h-5 mr-2 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                    Targeted Client API
-                  </h4>
-                  <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded">{{ client.clientId }}</span>
-                </div>
-
-                <div class="space-y-6 font-sans text-sm text-slate-300">
-                  <div>
-                    <p class="mb-2 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Target Endpoint</p>
-                    <div class="bg-black/50 border border-slate-700 rounded-lg p-3 font-mono text-xs flex items-center overflow-x-auto">
-                      <span class="text-emerald-400 font-bold mr-2">POST</span>
-                      <span class="text-slate-200"><span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Text Msg -->
-                  <div>
-                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">1</span> Send Text Message</p>
-                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chatId": "1234567890@c.us",
-    "message": "Hello from API!"
-  }'</pre>
-                  </div>
-
-                  <!-- Media URL -->
-                  <div>
-                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">2</span> Send Media (via URL)</p>
-                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chatId": "1234567890@c.us",
-    "filepath": "https://example.com/image.jpg",
-    "caption": "Check out this image!"
-  }'</pre>
-                  </div>
-
-                  <!-- File Upload -->
-                  <div>
-                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">3</span> Upload Local File (Document/Image)</p>
-                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
-  -F "chatId=1234567890@c.us" \
-  -F "caption=Here is the document" \
-  -F "file=@/path/to/local/file.pdf"</pre>
-                  </div>
-
-                  <!-- Voice Note -->
-                  <div>
-                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">4</span> Send Voice Note (Audio)</p>
-                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/send/{{ client.clientId }} \
-  -F "chatId=1234567890@c.us" \
-  -F "audio=true" \
-  -F "file=@/path/to/voice.ogg"</pre>
-                  </div>
-
-                  <!-- Edit Message -->
-                  <div>
-                    <p class="font-bold text-slate-200 mb-2 flex items-center"><span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[9px] mr-2 text-indigo-400">5</span> Edit Sent Message</p>
-                    <pre class="bg-black/50 border border-slate-700 p-3 rounded-lg text-emerald-300 overflow-x-auto font-mono text-[11px] leading-relaxed">curl -X POST <span class="api-base-url"></span>/whatsapp-manager/api/edit/{{ client.clientId }} \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messageId": "true_1234567890@c.us_ABCDEF1234567890",
-    "content": "Updated text content!"
-  }'</pre>
-                  </div>
-
-                  <!-- Params Table -->
-                  <div class="mt-6">
-                    <p class="font-bold text-slate-200 mb-3 border-b border-slate-700 pb-2 text-sm">Payload Parameters</p>
-                    <ul class="space-y-3">
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">chatId</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String | Array)</span> Target WhatsApp ID(s). Example: <code>123456789@c.us</code> (Direct) or <code>1234@g.us</code> (Group).</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">message</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> Text content of the message.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">caption</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> Text attached to media messages.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">filepath</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(String)</span> A public URL or absolute local path to an image, video, audio, or document.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">file</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(File)</span> Upload a file using <code>multipart/form-data</code>.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">audio</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Boolean)</span> Set to <code>true</code> to send audio as a playable Voice Note instead of a file.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">mentions</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Array)</span> List of phone numbers (without <code>@c.us</code>) to ping in the message.</span>
-                      </li>
-                      <li class="flex items-start">
-                        <code class="text-indigo-300 bg-indigo-900/30 px-1.5 py-0.5 rounded text-[11px] font-bold mr-2 mt-0.5">options</code>
-                        <span class="text-xs leading-relaxed"><span class="text-slate-400">(Object)</span> Advanced configurations matching <code>whatsapp-web.js MessageSendOptions</code>.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
             </div>
           @endeach
         @endif
@@ -345,6 +163,9 @@
     </div>
   </main>
 
+  <!-- ===============================
+       TAB: EDITOR
+       =============================== -->
   <main id="tab-editor" class="hidden flex-grow w-full bg-slate-50 p-4 sm:p-6 lg:p-8 flex gap-6 overflow-hidden">
     <aside class="w-72 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
       <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
@@ -359,19 +180,53 @@
     <section class="flex-grow flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
       <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
         <h3 class="font-mono text-sm font-semibold text-slate-600 flex items-center">
-          <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           <span id="current-file-name">Select a module...</span>
         </h3>
         <button id="editor-save-btn" data-action="save-file" disabled class="px-5 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center">
-          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
           Save & Hot Reload
         </button>
       </div>
-      
       <div id="monaco-container" class="monaco-editor-container bg-[#1e1e1e] flex-grow relative w-full h-full"></div>
     </section>
   </main>
 
+  <!-- ===============================
+       TAB: CONTENT PLANNER
+       =============================== -->
+  <main id="tab-planner" class="hidden flex-grow w-full bg-slate-50 overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-200 bg-white shadow-sm flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">Content Engine</h2>
+        <select id="planner-client-select" class="ml-4 px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-slate-50 font-semibold outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm cursor-pointer min-w-[200px]">
+          <option value="">Select Instance...</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-3">
+        <button data-action="open-bulk-modal" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-medium shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-1.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          Fast Import
+        </button>
+        <button data-action="open-schedule-modal" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Schedule Action
+        </button>
+      </div>
+    </div>
+    
+    <div class="flex-grow p-6 overflow-y-auto w-full custom-scrollbar">
+      <div id="calendar" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-full min-h-[600px]"></div>
+    </div>
+  </main>
+
+
+  <!-- ===============================
+       MODALS
+       =============================== -->
+
+  <!-- Config Modals -->
   <div id="commands-modal" class="fixed inset-0 z-[60] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="commands-modal-content">
       <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
@@ -381,15 +236,11 @@
         </button>
       </div>
       <div class="p-6">
-        <p class="text-sm text-slate-600 mb-5">Link logic modules to <strong id="modal-client-id-display" class="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded"></strong>. These scripts will automatically handle incoming messages for this specific client.</p>
         <form id="commands-form">
           <input type="hidden" id="modal-client-id" name="clientId">
           <div class="space-y-3 max-h-[45vh] overflow-y-auto pr-2" id="modal-checkbox-list"></div>
           <div class="mt-8 flex justify-end gap-3 pt-5 border-t border-slate-100">
-            <button type="button" data-action="close-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
-            <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-indigo-700 transition-colors flex items-center">
-              Apply Configuration
-            </button>
+            <button type="submit" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-indigo-700 transition-colors">Apply Configuration</button>
           </div>
         </form>
       </div>
@@ -409,16 +260,168 @@
       </div>
       <div class="p-6 flex-grow overflow-hidden flex flex-col">
         <form id="rules-form" class="flex flex-col h-full">
-          <div id="rules-chats-list" class="flex-grow overflow-y-auto pr-2">
-            <!-- Dynamically populated contacts and groups -->
-          </div>
+          <div id="rules-chats-list" class="flex-grow overflow-y-auto pr-2"></div>
           <div class="mt-6 flex justify-end gap-3 pt-5 border-t border-slate-100 shrink-0">
-            <button type="button" data-action="close-rules-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
-            <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-emerald-700 transition-colors flex items-center">
-              Save Rules
-            </button>
+            <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-emerald-700 transition-colors flex items-center">Save Rules</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Schedule Modal -->
+  <div id="schedule-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]" id="schedule-modal-content">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50">
+        <h3 class="font-bold text-xl text-slate-800 flex items-center">
+          <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Define Automation
+        </h3>
+        <button data-action="close-schedule-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 flex-grow overflow-y-auto custom-scrollbar bg-white">
+        <form id="schedule-form" class="space-y-6">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-2">Payload Type</label>
+            <select id="schedule-type" name="type" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer">
+              <option value="message">Standard Message / Media</option>
+              <option value="setStatus">Profile Status Text (About)</option>
+              <option value="evokeStatus">Revoke Story / Status Update</option>
+            </select>
+          </div>
+
+          <div id="schedule-fields-message" class="space-y-4">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div class="flex items-center justify-between mb-3">
+                <label class="block text-sm font-semibold text-slate-700">Target Contacts / Groups</label>
+                <button type="button" id="btn-load-planner-chats" class="text-xs font-bold text-indigo-600 bg-indigo-100 px-3 py-1 rounded-md hover:bg-indigo-200 transition-colors">Load Directory</button>
+              </div>
+              <div id="planner-chats-container" class="hidden max-h-40 overflow-y-auto custom-scrollbar border border-slate-300 bg-white rounded-lg p-2 space-y-1"></div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">Message Body (Text/Caption)</label>
+              <textarea name="message" rows="3" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"></textarea>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">Media Absolute Path or URL (Optional)</label>
+              <input type="text" name="mediaPath" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" placeholder="https://... or /path/to/local">
+            </div>
+          </div>
+
+          <div id="schedule-fields-status" class="hidden space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">New Status Profile Text</label>
+              <textarea name="statusText" rows="2" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"></textarea>
+            </div>
+          </div>
+
+          <div id="schedule-fields-revoke" class="hidden space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">Message ID to Evoke</label>
+              <input type="text" name="revokeMessageId" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" placeholder="true_521..._ABCDEF">
+            </div>
+          </div>
+
+          <hr class="border-slate-200">
+
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-2">Execution Timeline</label>
+            <div class="flex bg-slate-100 rounded-xl p-1 mb-4">
+              <button type="button" data-schedule-mode="false" class="schedule-mode-btn flex-1 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-lg transition-all">One-time Trigger</button>
+              <button type="button" data-schedule-mode="true" class="schedule-mode-btn flex-1 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-lg transition-all">Recurring Rule</button>
+            </div>
+            <input type="hidden" name="isRecurring" id="schedule-isRecurring" value="false">
+            
+            <div id="schedule-timing-one-time">
+              <input type="datetime-local" name="datetime" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer" required>
+            </div>
+
+            <div id="schedule-timing-recurring" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Pattern</label>
+                  <select name="recurrenceType" id="schedule-recurrence-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Time</label>
+                  <input type="time" name="recurrenceTime" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+              </div>
+              
+              <div id="schedule-recurrence-weekly" class="hidden">
+                <label class="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Days of Week</label>
+                <div class="flex gap-2 flex-wrap">
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="1" class="planner-dow rounded border-slate-300 text-indigo-600"> Mon</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="2" class="planner-dow rounded border-slate-300 text-indigo-600"> Tue</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="3" class="planner-dow rounded border-slate-300 text-indigo-600"> Wed</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="4" class="planner-dow rounded border-slate-300 text-indigo-600"> Thu</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="5" class="planner-dow rounded border-slate-300 text-indigo-600"> Fri</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="6" class="planner-dow rounded border-slate-300 text-indigo-600"> Sat</label>
+                  <label class="flex items-center text-sm gap-1.5"><input type="checkbox" value="0" class="planner-dow rounded border-slate-300 text-indigo-600"> Sun</label>
+                </div>
+              </div>
+
+              <div id="schedule-recurrence-monthly" class="hidden">
+                <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Day of Month (1-31)</label>
+                <input type="number" name="recurrenceDayOfMonth" min="1" max="31" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="p-5 border-t border-slate-100 shrink-0 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+        <button type="button" data-action="close-schedule-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-medium shadow-sm transition-all hover:bg-slate-50">Cancel</button>
+        <button type="button" id="btn-save-schedule" class="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-indigo-700 transition-all">Lock & Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Import Modal -->
+  <div id="bulk-import-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col" id="bulk-import-modal-content">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <h3 class="font-bold text-xl text-slate-800">Fast JSON Import</h3>
+        <button data-action="close-bulk-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-slate-500 mb-4">Paste an array of perfectly structured JSON schedule items to immediately map out thousands of future executions.</p>
+        <textarea id="bulk-import-data" rows="8" class="w-full px-4 py-3 border border-slate-300 rounded-xl font-mono text-xs focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner bg-slate-900 text-emerald-400 custom-scrollbar" placeholder='[\n  {\n    "type": "message",\n    "chatIds": ["1234567@c.us"],\n    "message": "Bulk execution test",\n    "isRecurring": false,\n    "timestamp": 1720000000000\n  }\n]'></textarea>
+      </div>
+      <div class="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 rounded-b-2xl">
+        <button type="button" id="btn-execute-bulk" class="px-6 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-slate-900 transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Ingest Timeline
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View/Delete Event Modal -->
+  <div id="view-schedule-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col" id="view-schedule-modal-content">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <h3 class="font-bold text-lg text-slate-800">Event Details</h3>
+        <button data-action="close-view-schedule-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-1.5 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 bg-white space-y-4">
+        <div class="text-xs font-mono bg-slate-100 text-slate-600 px-3 py-2 rounded-lg break-all" id="view-schedule-payload"></div>
+      </div>
+      <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-center rounded-b-2xl">
+        <button type="button" id="btn-delete-schedule" class="w-full py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl text-sm font-bold transition-all shadow-sm">
+          Revoke Event
+        </button>
       </div>
     </div>
   </div>

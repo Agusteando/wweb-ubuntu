@@ -12,6 +12,10 @@ export default class BotController {
     return Application.container.use('App/Services/BotService') as BotService
   }
 
+  private get scheduleService(): any {
+    return Application.container.use('App/Services/ScheduleService')
+  }
+
   public async index({ view }: HttpContextContract) {
     const clientsData = Array.from(this.botService.statuses.entries()).map(([clientId, status]) => {
       const config = this.botService.configs.get(clientId)
@@ -33,6 +37,58 @@ export default class BotController {
       modulesMetadataJson: JSON.stringify(modulesMetadata)
     })
   }
+
+  // ==== Scheduler Methods ====
+
+  public async getSchedules({ params, response }: HttpContextContract) {
+    try {
+      const schedules = this.scheduleService.getSchedulesForClient(params.clientId)
+      return response.json({ success: true, schedules })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async createSchedule({ params, request, response }: HttpContextContract) {
+    try {
+      const data = request.all()
+      const schedule = await this.scheduleService.createSchedule(params.clientId, data)
+      return response.json({ success: true, schedule })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async updateSchedule({ params, request, response }: HttpContextContract) {
+    try {
+      const data = request.all()
+      const schedule = await this.scheduleService.updateSchedule(params.clientId, params.id, data)
+      return response.json({ success: true, schedule })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async deleteSchedule({ params, response }: HttpContextContract) {
+    try {
+      await this.scheduleService.deleteSchedule(params.clientId, params.id)
+      return response.json({ success: true })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  public async bulkImportSchedules({ params, request, response }: HttpContextContract) {
+    try {
+      const { items } = request.all()
+      const result = await this.scheduleService.bulkCreate(params.clientId, items)
+      return response.json({ success: true, count: result.length })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
+  // ==========================
 
   public async add({ request, response }: HttpContextContract) {
     let clientId = request.input('clientId') || Math.random().toString(36).substring(7)
@@ -110,7 +166,6 @@ export default class BotController {
     let clientId = params.clientId;
     let client;
 
-    // Stable URL logic: fallback to any active client if specific ID is missing or set to "any"
     if (!clientId || clientId.toLowerCase() === 'any') {
       const readyClient = this.botService.getAnyReadyClient();
       if (!readyClient) {
@@ -176,7 +231,6 @@ export default class BotController {
             fs.mkdirSync(customTempDir, { recursive: true });
           }
 
-          // Use original clientName to preserve extension safely
           await uploadedFile.move(customTempDir, {
             name: uploadedFile.clientName,
             overwrite: true,
@@ -211,7 +265,6 @@ export default class BotController {
         args.mentions = contacts;
       }
 
-      // Merge in arbitrary options
       if (options && typeof options === 'object') {
         Object.assign(args, options);
       }
@@ -257,7 +310,6 @@ export default class BotController {
     let clientId = params.clientId;
     let client;
 
-    // Stable URL logic: fallback to any active client if specific ID is missing or set to "any"
     if (!clientId || clientId.toLowerCase() === 'any') {
       const readyClient = this.botService.getAnyReadyClient();
       if (!readyClient) {
