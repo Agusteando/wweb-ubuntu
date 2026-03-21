@@ -84,6 +84,26 @@ export default class BotController {
   public async getSchedules({ params, response }: HttpContextContract) {
     try {
       const schedules = this.scheduleService.getSchedulesForClient(params.clientId)
+      const client = this.botService.clients.get(params.clientId)
+      
+      // Enrich schedules with view counts dynamically if the client is connected
+      if (client && this.botService.statuses.get(params.clientId) === 'ready') {
+        await Promise.all(schedules.map(async (s) => {
+          if (s.statusMessageId) {
+            try {
+              const msg = await client.getMessageById(s.statusMessageId)
+              if (msg) {
+                // Determine view count via receipts array or views property depending on library variant
+                const viewerCount = msg.viewerReceipts ? msg.viewerReceipts.length : (msg as any).views || 0
+                s.viewsCount = viewerCount
+              }
+            } catch (err) {
+              // Message might have expired naturally after 24 hours, count defaults to what it was
+            }
+          }
+        }))
+      }
+
       return response.json({ success: true, schedules })
     } catch (e: any) {
       return response.status(500).json({ success: false, error: e.message })
@@ -94,6 +114,14 @@ export default class BotController {
     try {
       const data = request.all()
       const file = request.file('file')
+      
+      // Strict payload validation to completely prevent empty status scenarios
+      if (data.type === 'postTextStatus' && (!data.statusText || data.statusText.trim() === '')) {
+        throw new Error('A valid text body is required for Text Statuses.')
+      }
+      if (data.type === 'postMediaStatus' && (!file && !data.mediaPath)) {
+        throw new Error('A valid file upload or URL is required for Media Statuses.')
+      }
       
       // Handle file storage persistently so the scheduler can fetch it later
       if (file) {
@@ -136,7 +164,6 @@ export default class BotController {
   public async updateSchedule({ params, request, response }: HttpContextContract) {
     try {
       const data = request.all()
-      // Same process for update if needed in future
       const schedule = await this.scheduleService.updateSchedule(params.clientId, params.id, data)
       return response.json({ success: true, schedule })
     } catch (e: any) {
@@ -355,15 +382,23 @@ export default class BotController {
 
     try {
       if (statusType === 'text') {
-        if (!statusText || statusText.trim() === '') throw new Error('Status text is required');
+        if (!statusText || statusText.trim() === '') throw new Error('Status text is required and cannot be empty.');
         
         const args: any = { extra: {} };
         if (backgroundColor) args.extra.backgroundColor = backgroundColor;
-        if (fontStyle) args.extra.fontStyle = parseInt(fontStyle, 10);
+        if (fontStyle !== undefined && fontStyle !== null) args.extra.fontStyle = parseInt(fontStyle, 10);
         
-        await client.sendMessage('status@broadcast', statusText, args);
+        const result = await client.sendMessage('status@broadcast', statusText, args);
+        
+        return response.json({ 
+          status: 'ok', 
+          success: true, 
+          clientUsed: clientId,
+          messageId: result.id?._serialized ?? result.id
+        });
+        
       } else {
-        if (!file) throw new Error('Media file is required for media status posts');
+        if (!file) throw new Error('A media file is required to post a media status.');
         
         const sessionDir = Env.get('WA_SESSION_DIR');
         const customTempDir = path.join(sessionDir, 'uploads');
@@ -381,11 +416,16 @@ export default class BotController {
         if (statusType === 'gif') args.sendVideoAsGif = true;
         if (statusType === 'audio') args.sendAudioAsVoice = true;
 
-        await client.sendMessage('status@broadcast', media, args);
+        const result = await client.sendMessage('status@broadcast', media, args);
         fs.unlinkSync(fullPath); // Cleanup
-      }
 
-      return response.json({ status: 'ok', success: true, clientUsed: clientId });
+        return response.json({ 
+          status: 'ok', 
+          success: true, 
+          clientUsed: clientId,
+          messageId: result.id?._serialized ?? result.id
+        });
+      }
     } catch (error: any) {
       return response.status(500).json({ status: 'error', success: false, error: error.message });
     }

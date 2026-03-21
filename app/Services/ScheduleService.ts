@@ -32,6 +32,10 @@ export interface Schedule {
   // Revoke Field
   revokeMessageId?: string
 
+  // Tracked State
+  statusMessageId?: string
+  viewsCount?: number
+
   // Timing
   isRecurring: boolean
   timestamp?: number 
@@ -61,7 +65,7 @@ export default class ScheduleService {
       const data = await fs.readFile(this.file, 'utf8')
       this.schedules = JSON.parse(data)
 
-      // Migrate legacy profiles about functionalities to new status posting equivalents
+      // Migrate legacy profiles about functionalities to new status posting equivalents safely
       for (const s of this.schedules) {
         if (s.type === ('setStatus' as any) || s.type === ('postStatus' as any)) {
            s.type = s.mediaPath ? 'postMediaStatus' : 'postTextStatus'
@@ -158,7 +162,10 @@ export default class ScheduleService {
         }
       }
     } else if (s.type === 'postTextStatus') {
-      if (!s.statusText || s.statusText.trim() === '') return
+      if (!s.statusText || s.statusText.trim() === '') {
+        console.error(`[Scheduler] Aborted text status ${s.id}: Body was completely empty.`)
+        return
+      }
 
       const args: any = { extra: {} }
       if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
@@ -167,12 +174,19 @@ export default class ScheduleService {
       }
 
       try {
-        await client.sendMessage('status@broadcast', s.statusText, args)
+        const result = await client.sendMessage('status@broadcast', s.statusText, args)
+        if (result) {
+          s.statusMessageId = result.id?._serialized ?? result.id
+          await this.save()
+        }
       } catch (e) {
         console.error(`[Scheduler] Failed to post text status broadcast:`, e)
       }
     } else if (s.type === 'postMediaStatus') {
-      if (!s.mediaPath) return
+      if (!s.mediaPath) {
+        console.error(`[Scheduler] Aborted media status ${s.id}: Path was completely empty.`)
+        return
+      }
       
       let msgContent: any = null
       const args: any = {}
@@ -187,7 +201,11 @@ export default class ScheduleService {
         if (s.isGif) args.sendVideoAsGif = true
         if (s.isAudio) args.sendAudioAsVoice = true
         
-        await client.sendMessage('status@broadcast', msgContent, args)
+        const result = await client.sendMessage('status@broadcast', msgContent, args)
+        if (result) {
+          s.statusMessageId = result.id?._serialized ?? result.id
+          await this.save()
+        }
       } catch (e) {
         console.error(`[Scheduler] Failed to load/send media status ${s.id}:`, e)
       }

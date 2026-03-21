@@ -171,10 +171,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('schedule-type')?.addEventListener('change', (e) => {
     const val = e.target.value;
-    document.getElementById('schedule-fields-message').classList.toggle('hidden', val !== 'message');
-    document.getElementById('schedule-fields-text-status').classList.toggle('hidden', val !== 'postTextStatus');
-    document.getElementById('schedule-fields-media-status').classList.toggle('hidden', val !== 'postMediaStatus');
+    const isTextStatus = val === 'postTextStatus';
+    const isMediaStatus = val === 'postMediaStatus';
+    const isMsg = val === 'message';
+
+    document.getElementById('schedule-fields-message').classList.toggle('hidden', !isMsg);
+    document.getElementById('schedule-fields-text-status').classList.toggle('hidden', !isTextStatus);
+    document.getElementById('schedule-fields-media-status').classList.toggle('hidden', !isMediaStatus);
     document.getElementById('schedule-fields-revoke').classList.toggle('hidden', val !== 'revokeStatus');
+
+    // Toggle required fields properly so HTML5 validation blocks empty status attempts
+    const form = e.target.closest('form');
+    if (form) {
+        const msgInput = form.querySelector('[name="message"]');
+        if (msgInput) msgInput.required = isMsg;
+
+        const statusTextInput = form.querySelector('[name="statusText"]');
+        if (statusTextInput) statusTextInput.required = isTextStatus;
+    }
   });
 
   document.getElementById('schedule-recurrence-type')?.addEventListener('change', (e) => {
@@ -213,11 +227,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!clientId) return showToast('Client missing.', 'error');
     if(!form.checkValidity()) return form.reportValidity();
 
+    const type = document.getElementById('schedule-type').value;
+
+    // Explicit manual validation to ensure valid non-empty status payload
+    if (type === 'postMediaStatus') {
+       const fileInput = form.querySelector('[name="statusMediaFile"]');
+       const pathInput = form.querySelector('[name="statusMediaPath"]').value;
+       if (!fileInput.files[0] && !pathInput.trim()) {
+           return showToast('You must provide a file or URL to post a Media Status.', 'error');
+       }
+    }
+
     const btn = document.getElementById('btn-save-schedule');
     const originalText = btn.innerHTML;
     btn.innerHTML = 'Locking...'; btn.disabled = true;
 
-    const type = document.getElementById('schedule-type').value;
     const isRecurring = document.getElementById('schedule-isRecurring').value === 'true';
 
     const formData = new FormData();
@@ -316,7 +340,24 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentViewingSchedule = null;
   function openViewSchedule(schedule) {
     currentViewingSchedule = schedule;
-    document.getElementById('view-schedule-payload').textContent = JSON.stringify(schedule, null, 2);
+    
+    // Cleanup internal keys like lastRunAt, createdAt for cleaner UI viewing
+    const cleanSchedule = { ...schedule };
+    const views = cleanSchedule.viewsCount;
+    delete cleanSchedule.viewsCount;
+    delete cleanSchedule.lastRunAt;
+    delete cleanSchedule.createdAt;
+    
+    document.getElementById('view-schedule-payload').textContent = JSON.stringify(cleanSchedule, null, 2);
+    
+    const viewsContainer = document.getElementById('view-schedule-views-container');
+    if (views !== undefined && views !== null && (schedule.type === 'postTextStatus' || schedule.type === 'postMediaStatus')) {
+        viewsContainer.classList.remove('hidden');
+        document.getElementById('view-schedule-views-count').textContent = views;
+    } else {
+        viewsContainer.classList.add('hidden');
+    }
+    
     toggleModal('view-schedule-modal', true);
   }
 
@@ -460,7 +501,9 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('statusType', type);
       
       if (type === 'text') {
-        formData.append('statusText', form.querySelector('[name="statusText"]').value);
+        const textVal = form.querySelector('[name="statusText"]').value;
+        if (!textVal || textVal.trim() === '') return showToast('Status text cannot be empty', 'error');
+        formData.append('statusText', textVal);
         formData.append('backgroundColor', form.querySelector('[name="backgroundColor"]').value);
         formData.append('fontStyle', form.querySelector('[name="fontStyle"]').value);
       } else {
@@ -504,7 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
        form.querySelector('.qa-status-text-fields').classList.toggle('hidden', !isText);
        form.querySelector('.qa-status-media-fields').classList.toggle('hidden', isText);
        form.querySelector('[name="statusText"]').required = isText;
-       form.querySelector('.qa-media-file').disabled = isText;
+       form.querySelector('.qa-media-file').required = !isText;
     }
 
     // Media file preview
