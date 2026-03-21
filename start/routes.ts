@@ -1,3 +1,4 @@
+// filepath: start/routes.ts
 import Route from '@ioc:Adonis/Core/Route'
 import Application from '@ioc:Adonis/Core/Application'
 
@@ -23,6 +24,7 @@ Route.group(() => {
   Route.post('/whatsapp-manager/api/rules/:clientId', 'BotController.saveRules')
 
   // Scheduling & Planner Routes
+  Route.get('/whatsapp-manager/api/schedules/template', 'BotController.downloadTemplate')
   Route.get('/whatsapp-manager/api/schedules/:clientId', 'BotController.getSchedules')
   Route.post('/whatsapp-manager/api/schedules/:clientId', 'BotController.createSchedule')
   Route.put('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.updateSchedule')

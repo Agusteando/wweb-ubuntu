@@ -1,3 +1,4 @@
+// filepath: resources/js/bot.js
 console.log('✅ Bot Manager Engine Initialized');
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -114,8 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
            let title = '';
            let color = '#4f46e5';
            if (s.type === 'message') { title = s.message || (s.mediaPath ? 'Media Out' : 'Msg'); color = '#4f46e5'; }
-           else if (s.type === 'setStatus') { title = `Status: ${s.statusText}`; color = '#059669'; }
-           else if (s.type === 'evokeStatus') { title = `Revoke Story`; color = '#dc2626'; }
+           else if (s.type === 'postStatus') { title = `Status: ${s.statusText || s.message || 'Media'}`; color = '#059669'; }
+           else if (s.type === 'revokeStatus') { title = `Revoke Story`; color = '#dc2626'; }
            
            if (!s.isRecurring && s.timestamp) {
                const t = new Date(s.timestamp);
@@ -170,8 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('schedule-type')?.addEventListener('change', (e) => {
     const val = e.target.value;
     document.getElementById('schedule-fields-message').classList.toggle('hidden', val !== 'message');
-    document.getElementById('schedule-fields-status').classList.toggle('hidden', val !== 'setStatus');
-    document.getElementById('schedule-fields-revoke').classList.toggle('hidden', val !== 'evokeStatus');
+    document.getElementById('schedule-fields-status').classList.toggle('hidden', val !== 'postStatus');
+    document.getElementById('schedule-fields-revoke').classList.toggle('hidden', val !== 'revokeStatus');
   });
 
   document.getElementById('schedule-recurrence-type')?.addEventListener('change', (e) => {
@@ -223,9 +224,12 @@ document.addEventListener('DOMContentLoaded', () => {
       payload.chatIds = Array.from(document.querySelectorAll('.planner-chat-cb:checked')).map(cb => cb.value);
       payload.message = form.querySelector('[name="message"]').value;
       payload.mediaPath = form.querySelector('[name="mediaPath"]').value;
-    } else if (type === 'setStatus') {
+    } else if (type === 'postStatus') {
       payload.statusText = form.querySelector('[name="statusText"]').value;
-    } else if (type === 'evokeStatus') {
+      payload.mediaPath = form.querySelector('[name="statusMediaPath"]').value;
+      payload.backgroundColor = form.querySelector('[name="backgroundColor"]').value;
+      payload.fontStyle = parseInt(form.querySelector('[name="fontStyle"]').value, 10);
+    } else if (type === 'revokeStatus') {
       payload.revokeMessageId = form.querySelector('[name="revokeMessageId"]').value;
     }
 

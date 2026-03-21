@@ -1,3 +1,4 @@
+// filepath: app/Services/ScheduleService.ts
 import { promises as fs } from 'fs'
 import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
@@ -5,7 +6,7 @@ import Application from '@ioc:Adonis/Core/Application'
 import { v4 as uuidv4 } from 'uuid'
 import { MessageMedia, Client } from 'whatsapp-web.js'
 
-export type ScheduleType = 'message' | 'setStatus' | 'evokeStatus'
+export type ScheduleType = 'message' | 'postStatus' | 'revokeStatus'
 
 export interface Schedule {
   id: string
@@ -18,6 +19,8 @@ export interface Schedule {
   mediaPath?: string 
   filename?: string
   statusText?: string
+  backgroundColor?: string
+  fontStyle?: number
   revokeMessageId?: string
 
   // Timing
@@ -49,6 +52,12 @@ export default class ScheduleService {
     try {
       const data = await fs.readFile(this.file, 'utf8')
       this.schedules = JSON.parse(data)
+
+      // Migrate legacy profiles about functionalities to new status posting equivalents to prevent breaks
+      for (const s of this.schedules) {
+        if (s.type === ('setStatus' as any)) s.type = 'postStatus'
+        if (s.type === ('evokeStatus' as any)) s.type = 'revokeStatus'
+      }
     } catch (e) {
       this.schedules = []
     }
@@ -140,13 +149,45 @@ export default class ScheduleService {
           console.error(`[Scheduler] Failed to send scheduled msg to ${chatId}:`, e)
         }
       }
-    } else if (s.type === 'setStatus' && s.statusText) {
-      await client.setStatus(s.statusText)
-    } else if (s.type === 'evokeStatus' && s.revokeMessageId) {
-      if (typeof (client as any).evokeStatusMessage === 'function') {
-        await (client as any).evokeStatusMessage(s.revokeMessageId)
-      } else if (typeof (client as any).revokeStatus === 'function') {
-        await (client as any).revokeStatus(s.revokeMessageId)
+    } else if (s.type === 'postStatus') {
+      let msgContent: any = s.statusText || s.message || ''
+      const args: any = {}
+      
+      if (s.mediaPath) {
+        try {
+          if (s.mediaPath.startsWith('http')) {
+            msgContent = await MessageMedia.fromUrl(s.mediaPath)
+          } else {
+            msgContent = MessageMedia.fromFilePath(s.mediaPath)
+          }
+          if (s.statusText || s.message) {
+            args.caption = s.statusText || s.message
+          }
+        } catch (e) {
+          console.error(`[Scheduler] Media load failed for status schedule ${s.id}:`, e)
+        }
+      }
+
+      if (typeof msgContent === 'string') {
+        args.extra = {}
+        if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
+        if (s.fontStyle !== undefined && s.fontStyle !== null && s.fontStyle !== '') {
+          args.extra.fontStyle = Number(s.fontStyle)
+        }
+      }
+
+      try {
+        await client.sendMessage('status@broadcast', msgContent, args)
+      } catch (e) {
+        console.error(`[Scheduler] Failed to post status broadcast:`, e)
+      }
+    } else if (s.type === 'revokeStatus' && s.revokeMessageId) {
+      if (typeof (client as any).revokeStatusMessage === 'function') {
+        try {
+          await (client as any).revokeStatusMessage(s.revokeMessageId)
+        } catch (e) {
+          console.error(`[Scheduler] Failed to revoke status broadcast:`, e)
+        }
       }
     }
   }

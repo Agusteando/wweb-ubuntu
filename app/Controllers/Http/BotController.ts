@@ -1,3 +1,4 @@
+// filepath: app/Controllers/Http/BotController.ts
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import Env from '@ioc:Adonis/Core/Env'
@@ -39,6 +40,44 @@ export default class BotController {
   }
 
   // ==== Scheduler Methods ====
+
+  public async downloadTemplate({ response }: HttpContextContract) {
+    const template = [
+      {
+        "type": "message",
+        "chatIds": ["1234567890@c.us"],
+        "message": "Hello world!",
+        "mediaPath": "https://example.com/image.png",
+        "isRecurring": false,
+        "timestamp": 1720000000000
+      },
+      {
+        "type": "postStatus",
+        "statusText": "This is a custom text status update",
+        "backgroundColor": "#eb0c0c",
+        "fontStyle": 1,
+        "isRecurring": false,
+        "timestamp": 1720005000000
+      },
+      {
+        "type": "postStatus",
+        "mediaPath": "https://example.com/status_image.png",
+        "statusText": "Status image with a caption",
+        "isRecurring": false,
+        "timestamp": 1720010000000
+      },
+      {
+        "type": "revokeStatus",
+        "revokeMessageId": "true_status@broadcast_3EB0XXXXX",
+        "isRecurring": false,
+        "timestamp": 1720015000000
+      }
+    ]
+
+    response.header('Content-Type', 'application/json')
+    response.header('Content-Disposition', 'attachment; filename="status_import_template.json"')
+    return response.send(JSON.stringify(template, null, 2))
+  }
 
   public async getSchedules({ params, response }: HttpContextContract) {
     try {
