@@ -16,7 +16,7 @@
   <!-- Bundled FullCalendar Core -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   
-  <script src="/whatsapp-manager/resources/js/bot.js?v=4.0.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=4.1.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -62,6 +62,7 @@
           <button data-action="switch-tab" data-target="clients" id="tab-clients-btn" class="px-4 py-2 rounded-md font-medium text-sm bg-indigo-600 text-white shadow-inner transition-all">Instances</button>
           <button data-action="switch-tab" data-target="editor" id="tab-editor-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Logic Editor</button>
           <button data-action="switch-tab" data-target="planner" id="tab-planner-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Content Planner</button>
+          <button data-action="switch-tab" data-target="analytics" id="tab-analytics-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Status Analytics</button>
         </div>
       </div>
     </div>
@@ -164,11 +165,11 @@
 
                 <form class="post-status-form qa-tab-content hidden flex flex-col gap-3" id="qa-status-{{client.clientId}}" data-client-id="{{ client.clientId }}">
                   <select name="statusType" class="qa-status-type w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm">
-                    <option value="text">Text Story</option>
-                    <option value="image">Image Story</option>
-                    <option value="video">Video Story</option>
-                    <option value="gif">GIF Story</option>
-                    <option value="audio">Voice/Audio Story</option>
+                    <option value="text">Text Status (Story)</option>
+                    <option value="image">Image Status (Story)</option>
+                    <option value="video">Video Status (Story)</option>
+                    <option value="gif">GIF Status (Story)</option>
+                    <option value="audio">Voice/Audio Status (Story)</option>
                   </select>
                   
                   <div class="qa-status-text-fields block">
@@ -261,6 +262,43 @@
     
     <div class="flex-grow p-6 overflow-y-auto w-full custom-scrollbar">
       <div id="calendar" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 h-full min-h-[600px]"></div>
+    </div>
+  </main>
+
+  <!-- ===============================
+       TAB: ANALYTICS
+       =============================== -->
+  <main id="tab-analytics" class="hidden flex-grow w-full bg-slate-50 overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-200 bg-white shadow-sm flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">Status Analytics</h2>
+        <select id="analytics-client-select" class="ml-4 px-3 py-1.5 border border-slate-300 rounded-lg text-sm bg-slate-50 font-semibold outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm cursor-pointer min-w-[200px]">
+          <option value="">Select Instance...</option>
+        </select>
+      </div>
+      <button id="btn-refresh-analytics" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm font-medium shadow-sm transition-all flex items-center">
+        Refresh Metrics
+      </button>
+    </div>
+    <div class="flex-grow p-6 overflow-y-auto w-full custom-scrollbar">
+       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+           <table class="min-w-full divide-y divide-slate-200">
+             <thead class="bg-slate-50">
+               <tr>
+                 <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Date/Time</th>
+                 <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                 <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Details / Body</th>
+                 <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Views Tracked</th>
+               </tr>
+             </thead>
+             <tbody id="analytics-table-body" class="bg-white divide-y divide-slate-100">
+                <tr><td colspan="4" class="px-6 py-10 text-center text-slate-500 text-sm">Select an instance to view historic status performance</td></tr>
+             </tbody>
+           </table>
+       </div>
     </div>
   </main>
 

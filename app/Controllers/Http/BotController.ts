@@ -86,22 +86,48 @@ export default class BotController {
       const schedules = this.scheduleService.getSchedulesForClient(params.clientId)
       const client = this.botService.clients.get(params.clientId)
       
-      // Enrich schedules with view counts dynamically if the client is connected
+      // Enrich schedules with true view counts dynamically if the client is connected
       if (client && this.botService.statuses.get(params.clientId) === 'ready') {
+        let changed = false;
         await Promise.all(schedules.map(async (s) => {
           if (s.statusMessageId) {
             try {
               const msg = await client.getMessageById(s.statusMessageId)
               if (msg) {
-                // Determine view count via receipts array or views property depending on library variant
-                const viewerCount = msg.viewerReceipts ? msg.viewerReceipts.length : (msg as any).views || 0
-                s.viewsCount = viewerCount
+                let viewerCount = 0;
+                
+                // Inspect raw WhatsApp Web message view states natively depending on installed branch logic
+                if (Array.isArray((msg as any).viewerReceipts)) {
+                    viewerCount = (msg as any).viewerReceipts.length;
+                } else if (typeof (msg as any).views === 'number') {
+                    viewerCount = (msg as any).views;
+                }
+                
+                // If it exposes the getBroadcast utility cleanly
+                if (typeof (msg as any).getBroadcast === 'function') {
+                    try {
+                        const bcast = await (msg as any).getBroadcast();
+                        if (bcast && Array.isArray(bcast.viewerReceipts)) {
+                            viewerCount = Math.max(viewerCount, bcast.viewerReceipts.length);
+                        } else if (bcast && typeof bcast.views === 'number') {
+                            viewerCount = Math.max(viewerCount, bcast.views);
+                        }
+                    } catch(e){}
+                }
+
+                if (viewerCount > (s.viewsCount || 0)) {
+                    s.viewsCount = viewerCount;
+                    changed = true;
+                }
               }
             } catch (err) {
-              // Message might have expired naturally after 24 hours, count defaults to what it was
+              // Message might have expired naturally after 24 hours. The highest tracked watermark count remains safely.
             }
           }
         }))
+        if (changed) {
+            await this.scheduleService.save();
+        }
       }
 
       return response.json({ success: true, schedules })
@@ -123,7 +149,7 @@ export default class BotController {
         throw new Error('A valid file upload or URL is required for Media Statuses.')
       }
       
-      // Handle file storage persistently so the scheduler can fetch it later
+      // Handle file storage persistently so the scheduler can fetch it perfectly later when execution fires
       if (file) {
         const sessionDir = Env.get('WA_SESSION_DIR')
         if (!sessionDir) throw new Error('WA_SESSION_DIR missing')
@@ -136,7 +162,7 @@ export default class BotController {
         data.mediaPath = path.join(persistentDir, safeName)
       }
 
-      // Restore Arrays & Booleans corrupted by FormData flatness
+      // Restore Arrays & Booleans corrupted by FormData flatness during HTTP transition
       if (data.chatIds) data.chatIds = Array.isArray(data.chatIds) ? data.chatIds : [data.chatIds]
       data.isRecurring = data.isRecurring === 'true' || data.isRecurring === true
       if (data.isGif) data.isGif = data.isGif === 'true'
@@ -360,7 +386,7 @@ export default class BotController {
     }
   }
 
-  // Quick Action endpoint for posting WhatsApp Status directly
+  // Live Quick Action endpoint explicitly resolving real status broadcasting logic natively
   public async postStatus({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
@@ -384,18 +410,29 @@ export default class BotController {
       if (statusType === 'text') {
         if (!statusText || statusText.trim() === '') throw new Error('Status text is required and cannot be empty.');
         
-        const args: any = { extra: {} };
-        if (backgroundColor) args.extra.backgroundColor = backgroundColor;
-        if (fontStyle !== undefined && fontStyle !== null) args.extra.fontStyle = parseInt(fontStyle, 10);
+        const args: any = {};
+        if (backgroundColor || fontStyle !== undefined) {
+            args.extra = {};
+            if (backgroundColor) args.extra.backgroundColor = backgroundColor;
+            if (fontStyle !== undefined && fontStyle !== null) args.extra.fontStyle = parseInt(fontStyle, 10);
+        }
         
         const result = await client.sendMessage('status@broadcast', statusText, args);
+        const messageId = result.id?._serialized ?? result.id;
         
-        return response.json({ 
-          status: 'ok', 
-          success: true, 
-          clientUsed: clientId,
-          messageId: result.id?._serialized ?? result.id
+        // Push an inert schedule explicitly so the Status Analytics view tracks its total views dynamically
+        await this.scheduleService.createSchedule(clientId, {
+            type: 'postTextStatus',
+            statusText,
+            backgroundColor,
+            fontStyle: fontStyle !== undefined && fontStyle !== null ? parseInt(fontStyle, 10) : undefined,
+            isRecurring: false,
+            timestamp: Date.now(),
+            lastRunAt: Date.now(),
+            statusMessageId: messageId
         });
+        
+        return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
         
       } else {
         if (!file) throw new Error('A media file is required to post a media status.');
@@ -417,14 +454,23 @@ export default class BotController {
         if (statusType === 'audio') args.sendAudioAsVoice = true;
 
         const result = await client.sendMessage('status@broadcast', media, args);
-        fs.unlinkSync(fullPath); // Cleanup
-
-        return response.json({ 
-          status: 'ok', 
-          success: true, 
-          clientUsed: clientId,
-          messageId: result.id?._serialized ?? result.id
+        fs.unlinkSync(fullPath); 
+        
+        const messageId = result.id?._serialized ?? result.id;
+        
+        await this.scheduleService.createSchedule(clientId, {
+            type: 'postMediaStatus',
+            mediaPath: file.clientName, 
+            caption,
+            isGif: statusType === 'gif',
+            isAudio: statusType === 'audio',
+            isRecurring: false,
+            timestamp: Date.now(),
+            lastRunAt: Date.now(),
+            statusMessageId: messageId
         });
+
+        return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
       }
     } catch (error: any) {
       return response.status(500).json({ status: 'error', success: false, error: error.message });

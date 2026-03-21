@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function switchTab(target) {
-    const tabs = ['clients', 'editor', 'planner'];
+    const tabs = ['clients', 'editor', 'planner', 'analytics'];
     tabs.forEach(t => {
       const el = document.getElementById(`tab-${t}`);
       const btn = document.getElementById(`tab-${t}-btn`);
@@ -58,7 +58,97 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshPlannerClients();
       initCalendar();
     }
+
+    if (target === 'analytics') {
+      refreshAnalyticsClients();
+      loadAnalyticsData();
+    }
   }
+
+  /* --- Analytics Visualization --- */
+  
+  function refreshAnalyticsClients() {
+    const select = document.getElementById('analytics-client-select');
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">Select Instance...</option>';
+    document.querySelectorAll('[id^="client-"]').forEach(el => {
+      const clientId = el.id.replace('client-', '');
+      if (clientId) {
+        const opt = document.createElement('option');
+        opt.value = clientId;
+        opt.textContent = clientId;
+        select.appendChild(opt);
+      }
+    });
+    if (currentVal && select.querySelector(`option[value="${currentVal}"]`)) {
+      select.value = currentVal;
+    }
+  }
+
+  document.getElementById('analytics-client-select')?.addEventListener('change', loadAnalyticsData);
+  document.getElementById('btn-refresh-analytics')?.addEventListener('click', loadAnalyticsData);
+
+  async function loadAnalyticsData() {
+    const clientId = document.getElementById('analytics-client-select').value;
+    const tbody = document.getElementById('analytics-table-body');
+    if (!clientId) {
+      tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-slate-500 text-sm">Select an instance to view historic status performance</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-slate-500"><div class="spinner spinner-dark mx-auto"></div></td></tr>';
+
+    try {
+      const res = await fetch(`/whatsapp-manager/api/schedules/${clientId}`);
+      const data = await res.json();
+      if (!data.success) throw new Error();
+
+      const statuses = data.schedules.filter(s => ['postTextStatus', 'postMediaStatus'].includes(s.type) && s.statusMessageId);
+      
+      if (statuses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-slate-500 text-sm">No deployed statuses found with trackable views for this instance.</td></tr>';
+        return;
+      }
+
+      statuses.sort((a, b) => (b.lastRunAt || b.timestamp || 0) - (a.lastRunAt || a.timestamp || 0));
+      const maxViews = Math.max(...statuses.map(s => s.viewsCount || 0), 1);
+
+      tbody.innerHTML = statuses.map(s => {
+        const date = new Date(s.lastRunAt || s.timestamp || s.createdAt).toLocaleString();
+        const isText = s.type === 'postTextStatus';
+        const typeBadge = isText ? '<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">Text</span>' : '<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-semibold">Media</span>';
+        
+        let preview = '';
+        if (isText) {
+            preview = `<div class="max-w-xs truncate font-bold px-2 py-1 rounded" style="background-color: ${s.backgroundColor || '#eee'}; color: #fff;">${s.statusText}</div>`;
+        } else {
+            preview = `<div class="max-w-xs truncate font-medium text-slate-800">${s.caption || '<em>No caption</em>'}</div><div class="text-[10px] text-slate-400 truncate w-48">${s.mediaPath}</div>`;
+        }
+
+        const views = s.viewsCount || 0;
+        const widthPct = Math.round((views / maxViews) * 100);
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700">${date}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${typeBadge}</td>
+            <td class="px-6 py-4">${preview}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center gap-3">
+                <span class="font-bold text-slate-700 w-8 text-right">${views}</span>
+                <div class="w-32 bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                  <div class="bg-emerald-500 h-2.5 rounded-full" style="width: ${widthPct}%"></div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-red-500 text-sm">Failed to load analytics data.</td></tr>';
+    }
+  }
+
 
   /* --- Planner & Calendar Initialization --- */
 
@@ -180,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('schedule-fields-media-status').classList.toggle('hidden', !isMediaStatus);
     document.getElementById('schedule-fields-revoke').classList.toggle('hidden', val !== 'revokeStatus');
 
-    // Toggle required fields properly so HTML5 validation blocks empty status attempts
+    // Toggle required fields properly so HTML5 validation blocks empty status attempts naturally
     const form = e.target.closest('form');
     if (form) {
         const msgInput = form.querySelector('[name="message"]');
@@ -229,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const type = document.getElementById('schedule-type').value;
 
-    // Explicit manual validation to ensure valid non-empty status payload
+    // Explicit manual validation to ensure valid non-empty media status payload
     if (type === 'postMediaStatus') {
        const fileInput = form.querySelector('[name="statusMediaFile"]');
        const pathInput = form.querySelector('[name="statusMediaPath"]').value;
@@ -463,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Handle Quick Action Send Msg
+  // Handle Quick Action Dispatching
   document.body.addEventListener('submit', async (e) => {
     if (e.target.classList.contains('send-message-form') && e.target.id.startsWith('qa-msg-')) {
       e.preventDefault();
@@ -524,9 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const data = await res.json();
         if(data.success) { 
-           showToast('Status Posted to WhatsApp!'); 
+           showToast('Status Successfully Broadcasted!'); 
            form.reset(); 
-           // trigger event to reset preview
+           // trigger event to reset preview rendering
            const textPre = form.querySelector('.qa-text-preview');
            if (textPre) { textPre.textContent = 'Preview'; textPre.style.backgroundColor = '#eb0c0c'; textPre.style.fontFamily = 'sans-serif'; textPre.style.fontWeight = 'normal'; }
            const mediaPre = form.querySelector('.media-preview-container');
@@ -550,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
        form.querySelector('.qa-media-file').required = !isText;
     }
 
-    // Media file preview
+    // Media file preview logic
     if (e.target.type === 'file' && (e.target.classList.contains('qa-media-file') || e.target.classList.contains('planner-media-file'))) {
       const file = e.target.files[0];
       const previewContainer = e.target.closest('div').parentElement.querySelector('.media-preview-container');
@@ -578,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.body.addEventListener('input', (e) => {
-    // Text Status live preview
+    // Text Status live CSS preview
     if (e.target.classList.contains('qa-preview-trigger') || e.target.classList.contains('status-preview-trigger')) {
        const form = e.target.closest('div').parentElement;
        const textInput = form.querySelector('[name="statusText"]');

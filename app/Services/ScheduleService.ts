@@ -65,7 +65,7 @@ export default class ScheduleService {
       const data = await fs.readFile(this.file, 'utf8')
       this.schedules = JSON.parse(data)
 
-      // Migrate legacy profiles about functionalities to new status posting equivalents safely
+      // Migrate legacy profiles about functionalities to new robust status posting equivalents safely
       for (const s of this.schedules) {
         if (s.type === ('setStatus' as any) || s.type === ('postStatus' as any)) {
            s.type = s.mediaPath ? 'postMediaStatus' : 'postTextStatus'
@@ -167,10 +167,13 @@ export default class ScheduleService {
         return
       }
 
-      const args: any = { extra: {} }
-      if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
-      if (s.fontStyle !== undefined && s.fontStyle !== null) {
-        args.extra.fontStyle = Number(s.fontStyle)
+      const args: any = {}
+      if (s.backgroundColor || s.fontStyle !== undefined) {
+        args.extra = {}
+        if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
+        if (s.fontStyle !== undefined && s.fontStyle !== null) {
+          args.extra.fontStyle = Number(s.fontStyle)
+        }
       }
 
       try {
@@ -210,17 +213,15 @@ export default class ScheduleService {
         console.error(`[Scheduler] Failed to load/send media status ${s.id}:`, e)
       }
     } else if (s.type === 'revokeStatus' && s.revokeMessageId) {
-      if (typeof (client as any).revokeStatusMessage === 'function') {
-        try {
-          await (client as any).revokeStatusMessage(s.revokeMessageId)
-        } catch (e) {
-          console.error(`[Scheduler] Failed to revoke status broadcast:`, e)
-        }
+      try {
+        await (client as any).revokeStatusMessage(s.revokeMessageId)
+      } catch (e) {
+        console.error(`[Scheduler] Failed to revoke status broadcast:`, e)
       }
     }
   }
 
-  private async save() {
+  public async save() {
     await fs.writeFile(this.file, JSON.stringify(this.schedules, null, 2), 'utf8')
   }
 
