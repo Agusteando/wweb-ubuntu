@@ -6,7 +6,7 @@ import Application from '@ioc:Adonis/Core/Application'
 import { v4 as uuidv4 } from 'uuid'
 import { MessageMedia, Client } from 'whatsapp-web.js'
 
-export type ScheduleType = 'message' | 'postStatus' | 'revokeStatus'
+export type ScheduleType = 'message' | 'postTextStatus' | 'postMediaStatus' | 'revokeStatus'
 
 export interface Schedule {
   id: string
@@ -18,9 +18,18 @@ export interface Schedule {
   message?: string
   mediaPath?: string 
   filename?: string
+  
+  // Text Status Fields
   statusText?: string
   backgroundColor?: string
   fontStyle?: number
+  
+  // Media Status Fields
+  caption?: string
+  isGif?: boolean
+  isAudio?: boolean
+
+  // Revoke Field
   revokeMessageId?: string
 
   // Timing
@@ -44,7 +53,6 @@ export default class ScheduleService {
   private timer: NodeJS.Timeout | null = null
   
   constructor() {
-    // Isolated storage within the external data path
     this.file = path.join(Env.get('WA_SESSION_DIR'), 'schedules.json')
   }
 
@@ -53,9 +61,11 @@ export default class ScheduleService {
       const data = await fs.readFile(this.file, 'utf8')
       this.schedules = JSON.parse(data)
 
-      // Migrate legacy profiles about functionalities to new status posting equivalents to prevent breaks
+      // Migrate legacy profiles about functionalities to new status posting equivalents
       for (const s of this.schedules) {
-        if (s.type === ('setStatus' as any)) s.type = 'postStatus'
+        if (s.type === ('setStatus' as any) || s.type === ('postStatus' as any)) {
+           s.type = s.mediaPath ? 'postMediaStatus' : 'postTextStatus'
+        }
         if (s.type === ('evokeStatus' as any)) s.type = 'revokeStatus'
       }
     } catch (e) {
@@ -66,7 +76,6 @@ export default class ScheduleService {
 
   private startTimer() {
     const now = new Date()
-    // Align interval precisely to the start of the next minute
     const msUntilNextMinute = 60000 - (now.getSeconds() * 1000 + now.getMilliseconds())
     
     setTimeout(() => {
@@ -106,7 +115,6 @@ export default class ScheduleService {
       }
 
       if (shouldRun) {
-        // Prevent aggressive overlapping execution within the same execution minute 
         if (s.lastRunAt && nowMs - s.lastRunAt < 50000) continue
         
         s.lastRunAt = nowMs
@@ -149,37 +157,39 @@ export default class ScheduleService {
           console.error(`[Scheduler] Failed to send scheduled msg to ${chatId}:`, e)
         }
       }
-    } else if (s.type === 'postStatus') {
-      let msgContent: any = s.statusText || s.message || ''
-      const args: any = {}
-      
-      if (s.mediaPath) {
-        try {
-          if (s.mediaPath.startsWith('http')) {
-            msgContent = await MessageMedia.fromUrl(s.mediaPath)
-          } else {
-            msgContent = MessageMedia.fromFilePath(s.mediaPath)
-          }
-          if (s.statusText || s.message) {
-            args.caption = s.statusText || s.message
-          }
-        } catch (e) {
-          console.error(`[Scheduler] Media load failed for status schedule ${s.id}:`, e)
-        }
-      }
+    } else if (s.type === 'postTextStatus') {
+      if (!s.statusText || s.statusText.trim() === '') return
 
-      if (typeof msgContent === 'string') {
-        args.extra = {}
-        if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
-        if (s.fontStyle !== undefined && s.fontStyle !== null && s.fontStyle !== '') {
-          args.extra.fontStyle = Number(s.fontStyle)
-        }
+      const args: any = { extra: {} }
+      if (s.backgroundColor) args.extra.backgroundColor = s.backgroundColor
+      if (s.fontStyle !== undefined && s.fontStyle !== null) {
+        args.extra.fontStyle = Number(s.fontStyle)
       }
 
       try {
+        await client.sendMessage('status@broadcast', s.statusText, args)
+      } catch (e) {
+        console.error(`[Scheduler] Failed to post text status broadcast:`, e)
+      }
+    } else if (s.type === 'postMediaStatus') {
+      if (!s.mediaPath) return
+      
+      let msgContent: any = null
+      const args: any = {}
+      
+      try {
+        if (s.mediaPath.startsWith('http')) {
+          msgContent = await MessageMedia.fromUrl(s.mediaPath)
+        } else {
+          msgContent = MessageMedia.fromFilePath(s.mediaPath)
+        }
+        if (s.caption) args.caption = s.caption
+        if (s.isGif) args.sendVideoAsGif = true
+        if (s.isAudio) args.sendAudioAsVoice = true
+        
         await client.sendMessage('status@broadcast', msgContent, args)
       } catch (e) {
-        console.error(`[Scheduler] Failed to post status broadcast:`, e)
+        console.error(`[Scheduler] Failed to load/send media status ${s.id}:`, e)
       }
     } else if (s.type === 'revokeStatus' && s.revokeMessageId) {
       if (typeof (client as any).revokeStatusMessage === 'function') {

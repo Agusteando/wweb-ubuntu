@@ -115,7 +115,8 @@ document.addEventListener('DOMContentLoaded', () => {
            let title = '';
            let color = '#4f46e5';
            if (s.type === 'message') { title = s.message || (s.mediaPath ? 'Media Out' : 'Msg'); color = '#4f46e5'; }
-           else if (s.type === 'postStatus') { title = `Status: ${s.statusText || s.message || 'Media'}`; color = '#059669'; }
+           else if (s.type === 'postTextStatus') { title = `Status: ${s.statusText || 'Text'}`; color = '#059669'; }
+           else if (s.type === 'postMediaStatus') { title = `Status: ${s.caption || 'Media'}`; color = '#059669'; }
            else if (s.type === 'revokeStatus') { title = `Revoke Story`; color = '#dc2626'; }
            
            if (!s.isRecurring && s.timestamp) {
@@ -171,7 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('schedule-type')?.addEventListener('change', (e) => {
     const val = e.target.value;
     document.getElementById('schedule-fields-message').classList.toggle('hidden', val !== 'message');
-    document.getElementById('schedule-fields-status').classList.toggle('hidden', val !== 'postStatus');
+    document.getElementById('schedule-fields-text-status').classList.toggle('hidden', val !== 'postTextStatus');
+    document.getElementById('schedule-fields-media-status').classList.toggle('hidden', val !== 'postMediaStatus');
     document.getElementById('schedule-fields-revoke').classList.toggle('hidden', val !== 'revokeStatus');
   });
 
@@ -218,43 +220,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const type = document.getElementById('schedule-type').value;
     const isRecurring = document.getElementById('schedule-isRecurring').value === 'true';
 
-    const payload = { type, isRecurring };
+    const formData = new FormData();
+    formData.append('type', type);
+    formData.append('isRecurring', isRecurring);
 
     if (type === 'message') {
-      payload.chatIds = Array.from(document.querySelectorAll('.planner-chat-cb:checked')).map(cb => cb.value);
-      payload.message = form.querySelector('[name="message"]').value;
-      payload.mediaPath = form.querySelector('[name="mediaPath"]').value;
-    } else if (type === 'postStatus') {
-      payload.statusText = form.querySelector('[name="statusText"]').value;
-      payload.mediaPath = form.querySelector('[name="statusMediaPath"]').value;
-      payload.backgroundColor = form.querySelector('[name="backgroundColor"]').value;
-      payload.fontStyle = parseInt(form.querySelector('[name="fontStyle"]').value, 10);
+      const chatIds = Array.from(document.querySelectorAll('.planner-chat-cb:checked')).map(cb => cb.value);
+      chatIds.forEach(id => formData.append('chatIds[]', id));
+      formData.append('message', form.querySelector('[name="message"]').value);
+      const fileInput = form.querySelector('[name="messageFile"]');
+      if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
+      else formData.append('mediaPath', form.querySelector('[name="mediaPath"]').value);
+    } else if (type === 'postTextStatus') {
+      formData.append('statusText', form.querySelector('[name="statusText"]').value);
+      formData.append('backgroundColor', form.querySelector('[name="backgroundColor"]').value);
+      formData.append('fontStyle', form.querySelector('[name="fontStyle"]').value);
+    } else if (type === 'postMediaStatus') {
+      formData.append('caption', form.querySelector('[name="statusCaption"]').value);
+      const fileInput = form.querySelector('[name="statusMediaFile"]');
+      if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
+      else formData.append('mediaPath', form.querySelector('[name="statusMediaPath"]').value);
+      formData.append('isGif', form.querySelector('[name="statusIsGif"]').checked);
+      formData.append('isAudio', form.querySelector('[name="statusIsAudio"]').checked);
     } else if (type === 'revokeStatus') {
-      payload.revokeMessageId = form.querySelector('[name="revokeMessageId"]').value;
+      formData.append('revokeMessageId', form.querySelector('[name="revokeMessageId"]').value);
     }
 
     if (!isRecurring) {
-      payload.timestamp = new Date(form.querySelector('[name="datetime"]').value).getTime();
+      formData.append('timestamp', new Date(form.querySelector('[name="datetime"]').value).getTime());
     } else {
-      payload.recurrence = {
-        type: document.getElementById('schedule-recurrence-type').value,
-        time: form.querySelector('[name="recurrenceTime"]').value
-      };
-      if (!payload.recurrence.time) return showToast('Time required for recurrence', 'error'), btn.innerHTML = originalText, btn.disabled = false;
-      
-      if (payload.recurrence.type === 'weekly') {
-        payload.recurrence.daysOfWeek = Array.from(document.querySelectorAll('.planner-dow:checked')).map(cb => parseInt(cb.value));
-      }
-      if (payload.recurrence.type === 'monthly') {
-        payload.recurrence.dayOfMonth = parseInt(form.querySelector('[name="recurrenceDayOfMonth"]').value);
-      }
+      formData.append('recurrenceType', document.getElementById('schedule-recurrence-type').value);
+      formData.append('recurrenceTime', form.querySelector('[name="recurrenceTime"]').value);
+      const dow = Array.from(document.querySelectorAll('.planner-dow:checked')).map(cb => cb.value).join(',');
+      if (dow) formData.append('recurrenceDaysOfWeek', dow);
+      formData.append('recurrenceDayOfMonth', form.querySelector('[name="recurrenceDayOfMonth"]').value);
     }
 
     try {
       const res = await fetch(`/whatsapp-manager/api/schedules/${clientId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: formData
       });
       const data = await res.json();
       if (data.success) {
@@ -400,6 +405,155 @@ document.addEventListener('DOMContentLoaded', () => {
       if (action === 'create-file') createEditorFile();
       if (action === 'save-file') saveCurrentEditorFile();
       if (action === 'open-file') openEditorFile(actionBtn.dataset.filename);
+    }
+    
+    // Action Tabs UI (Client Quick Actions)
+    if (e.target.classList.contains('qa-tab-btn')) {
+      const parent = e.target.closest('.p-4');
+      parent.querySelectorAll('.qa-tab-btn').forEach(b => {
+         b.classList.remove('text-indigo-700', 'border-indigo-700');
+         b.classList.add('text-slate-500', 'border-transparent');
+      });
+      e.target.classList.remove('text-slate-500', 'border-transparent');
+      e.target.classList.add('text-indigo-700', 'border-indigo-700');
+      
+      parent.querySelectorAll('.qa-tab-content').forEach(c => c.classList.add('hidden'));
+      document.getElementById(e.target.dataset.target).classList.remove('hidden');
+    }
+  });
+
+  // Handle Quick Action Send Msg
+  document.body.addEventListener('submit', async (e) => {
+    if (e.target.classList.contains('send-message-form') && e.target.id.startsWith('qa-msg-')) {
+      e.preventDefault();
+      const form = e.target;
+      const clientId = form.dataset.clientId;
+      const payload = {
+        chatId: form.querySelector('[name="chatId"]').value,
+        message: form.querySelector('[name="message"]').value
+      };
+      
+      const btn = form.querySelector('button[type="submit"]');
+      const ogText = btn.innerHTML;
+      btn.innerHTML = 'Sending...'; btn.disabled = true;
+
+      try {
+        const res = await fetch(`/whatsapp-manager/bot/send/${clientId}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if(data.success) { showToast('Message Sent!'); form.reset(); }
+        else { showToast(data.error || 'Failed', 'error'); }
+      } catch(err) { showToast('Network Error', 'error'); }
+      finally { btn.innerHTML = ogText; btn.disabled = false; }
+    }
+    
+    if (e.target.classList.contains('post-status-form')) {
+      e.preventDefault();
+      const form = e.target;
+      const clientId = form.dataset.clientId;
+      const type = form.querySelector('.qa-status-type').value;
+      
+      const formData = new FormData();
+      formData.append('statusType', type);
+      
+      if (type === 'text') {
+        formData.append('statusText', form.querySelector('[name="statusText"]').value);
+        formData.append('backgroundColor', form.querySelector('[name="backgroundColor"]').value);
+        formData.append('fontStyle', form.querySelector('[name="fontStyle"]').value);
+      } else {
+        const fileInput = form.querySelector('.qa-media-file');
+        if (!fileInput.files[0]) return showToast('Media file required', 'error');
+        formData.append('file', fileInput.files[0]);
+        formData.append('caption', form.querySelector('[name="caption"]').value);
+      }
+
+      const btn = form.querySelector('button[type="submit"]');
+      const ogText = btn.innerHTML;
+      btn.innerHTML = 'Posting...'; btn.disabled = true;
+
+      try {
+        const res = await fetch(`/whatsapp-manager/bot/status/${clientId}`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if(data.success) { 
+           showToast('Status Posted to WhatsApp!'); 
+           form.reset(); 
+           // trigger event to reset preview
+           const textPre = form.querySelector('.qa-text-preview');
+           if (textPre) { textPre.textContent = 'Preview'; textPre.style.backgroundColor = '#eb0c0c'; textPre.style.fontFamily = 'sans-serif'; textPre.style.fontWeight = 'normal'; }
+           const mediaPre = form.querySelector('.media-preview-container');
+           if (mediaPre) { mediaPre.classList.add('hidden'); }
+        }
+        else { showToast(data.error || 'Failed', 'error'); }
+      } catch(err) { showToast('Network Error', 'error'); }
+      finally { btn.innerHTML = ogText; btn.disabled = false; }
+    }
+  });
+
+  // Live Previews and Select toggles for QA Status form & Planner Status form
+  document.body.addEventListener('change', (e) => {
+    // Media select type toggle (Text vs Image/Video/etc)
+    if (e.target.classList.contains('qa-status-type')) {
+       const form = e.target.closest('form');
+       const isText = e.target.value === 'text';
+       form.querySelector('.qa-status-text-fields').classList.toggle('hidden', !isText);
+       form.querySelector('.qa-status-media-fields').classList.toggle('hidden', isText);
+       form.querySelector('[name="statusText"]').required = isText;
+       form.querySelector('.qa-media-file').disabled = isText;
+    }
+
+    // Media file preview
+    if (e.target.type === 'file' && (e.target.classList.contains('qa-media-file') || e.target.classList.contains('planner-media-file'))) {
+      const file = e.target.files[0];
+      const previewContainer = e.target.closest('div').parentElement.querySelector('.media-preview-container');
+      if (!previewContainer) return;
+      const img = previewContainer.querySelector('img');
+      const video = previewContainer.querySelector('video');
+      
+      if (!file) {
+         previewContainer.classList.add('hidden');
+         return;
+      }
+      
+      previewContainer.classList.remove('hidden');
+      const url = URL.createObjectURL(file);
+      if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
+         img.classList.add('hidden');
+         video.classList.remove('hidden');
+         video.src = url;
+      } else {
+         video.classList.add('hidden');
+         img.classList.remove('hidden');
+         img.src = url;
+      }
+    }
+  });
+
+  document.body.addEventListener('input', (e) => {
+    // Text Status live preview
+    if (e.target.classList.contains('qa-preview-trigger') || e.target.classList.contains('status-preview-trigger')) {
+       const form = e.target.closest('div').parentElement;
+       const textInput = form.querySelector('[name="statusText"]');
+       const bgInput = form.querySelector('[name="backgroundColor"]');
+       const fontInput = form.querySelector('[name="fontStyle"]');
+       
+       if (!textInput || !bgInput || !fontInput) return;
+       
+       const preview = form.querySelector('.qa-text-preview') || form.querySelector('.status-text-preview');
+       if (!preview) return;
+
+       preview.textContent = textInput.value || 'Preview Text';
+       preview.style.backgroundColor = bgInput.value;
+       
+       const fontVal = parseInt(fontInput.value, 10);
+       const styles = ['sans-serif', 'sans-serif', 'cursive', 'sans-serif', 'serif', 'serif', 'sans-serif', 'monospace'];
+       preview.style.fontFamily = styles[fontVal] || 'sans-serif';
+       preview.style.fontWeight = fontVal === 3 ? 'bold' : 'normal';
     }
   });
 

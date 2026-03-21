@@ -55,3 +55,8 @@ Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media/:clientId', 'BotController.sendMessages')
+
+// Status Posting Endpoints
+Route.post('/whatsapp-manager/bot/status/:clientId', 'BotController.postStatus')
+Route.post('/whatsapp-manager/api/status/:clientId', 'BotController.postStatus')
+Route.post('/whatsapp-manager/api/status/any', 'BotController.postStatus')
