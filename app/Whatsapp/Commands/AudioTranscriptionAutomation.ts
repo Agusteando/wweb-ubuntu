@@ -1,3 +1,4 @@
+// filepath: app/Whatsapp/Commands/AudioTranscriptionAutomation.ts
 import { Client, Message } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import { createAudioPrediction2 } from 'App/Services/Utils'
@@ -11,6 +12,11 @@ export default class AudioTranscriptionAutomation {
   private botIsReplying = false;
 
   async handle(message: Message, _client: Client, session: UserSession) {
+    // Strict block to prevent transcribing audio/video status stories (which causes accidental status posts)
+    if (message.isStatus || message.from === 'status@broadcast' || message.to === 'status@broadcast') {
+        return;
+    }
+
     if (message.hasMedia && !session.skip && 
         (message.type === 'ptt' || (message.type === 'audio' && !this.preventUnwanted))) {
         try {

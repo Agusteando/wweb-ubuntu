@@ -1,3 +1,4 @@
+// filepath: app/Services/CommandRegistry.ts
 import { Client, Message } from 'whatsapp-web.js'
 import { promises as fs, existsSync } from 'fs'
 import path from 'path'
@@ -145,6 +146,11 @@ export default class CommandRegistry {
   }
 
   public static async execute(commandFiles: string[], message: Message, client: Client, rules: Record<string, { include: string[], exclude: string[] }> = {}) {
+    // SECURITY PATCH: Prevent automated systems from interpreting, transcribing, or replying to Statuses (Stories)
+    if (message.isStatus || message.from === 'status@broadcast' || message.to === 'status@broadcast') {
+      return;
+    }
+
     const session = SessionManager.getOrCreate(message.from)
     const isGroup = message.from.endsWith('@g.us')
     
