@@ -16,13 +16,13 @@ export default class SendCommand {
             if (!session.adjuntados) session.adjuntados = []
             console.log("Before !send, adjuntados:", session.adjuntados);
 
+            // YOUR EXACT ORIGINAL PARSING LOGIC RESTORED
             var argumentos = body.replace(new RegExp(`^${cmd}`, 'i'), "").replace('🐺', '').trim().split(/\s(?=\w+:)/)
                 .reduce((acc: any, el: string) => {
-                    const parts = el.split(/:(.+)/);
-                    const key = parts[0];
-                    // Slice and rejoin in case the target value inherently includes colons (e.g. URLs or times)
-                    const value = parts.slice(1).join(':'); 
-                    if (key && value) acc[key.trim()] = value.trim();
+                    const [key, value] = el.split(/:(.+)/);
+                    if (key && value) {
+                        acc[key.trim()] = value.trim();
+                    }
                     return acc;
                 }, {});
 
