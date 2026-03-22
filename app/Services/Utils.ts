@@ -1,3 +1,4 @@
+// filepath: app/Services/Utils.ts
 import { google } from 'googleapis'
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -8,7 +9,7 @@ import FormData from 'form-data'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
 import tmp from 'tmp'
 
-export async function getGoogleAdminAuth(scopes: string[]) {
+export async function getGoogleAdminAuth(scopes: string[], subjectEmail?: string) {
   const credPath = Env.get('GOOGLE_CREDENTIALS_PATH')
   
   if (!credPath) {
@@ -35,7 +36,7 @@ export async function getGoogleAdminAuth(scopes: string[]) {
     email: auth.client_email,
     key: auth.private_key,
     scopes: scopes,
-    subject: Env.get('G_SUITE_ADMIN_EMAIL', 'desarrollo.tecnologico@casitaiedis.edu.mx')
+    subject: subjectEmail || Env.get('G_SUITE_ADMIN_EMAIL', 'desarrollo.tecnologico@casitaiedis.edu.mx')
   })
   
   await client.authorize()
@@ -180,12 +181,9 @@ export async function createAudioPrediction2(message: any) {
 
         let detectedLanguage = 'unknown';
         try {
-            // Placeholder: Whisper doesn't natively return language unless verbose_json is used,
-            // but preserving your requested object signature
             detectedLanguage = 'es'; 
         } catch (e) {}
 
-        // Returning the tempPath so the caller can clean it up per your design
         resolve({ transcription, audioFilePath: tempPath, detectedLanguage });
       } catch (error) {
         try { await fs.unlink(tempPath); } catch (e) {}
@@ -196,8 +194,71 @@ export async function createAudioPrediction2(message: any) {
 }
 
 export async function sendEmail(data: any) {
-  console.log('Sending Email:', data)
-  return { status: 200 }
+  data = Object.assign({}, {
+    to: data.to || 'aguswubslyn@gmail.com',
+    from: data.from || 'desarrollo.tecnologico@casitaiedis.edu.mx',
+    alias: data.alias || 'Agustín Jurado',
+    data: data.data || {},
+    html: data.message || '',
+    subject: data.subject || 'Información solicitada',
+    files: data.files || undefined,
+    template: data.template || undefined
+  }, data);
+
+  try {
+    console.log('Preparing to dispatch email to:', data.to);
+    
+    // Auth directly acting as the specified sender via DWD
+    const jwtClient = await getGoogleAdminAuth(['https://mail.google.com/'], data.from);
+    const gmail = google.gmail({ version: 'v1', auth: jwtClient });
+    
+    // Use Nodemailer's MailComposer to flawlessly generate an RFC822 spec string out of object data
+    const MailComposer = require('nodemailer/lib/mail-composer');
+
+    const attachments = (data.files || []).map((file: any) => {
+        let extension = 'bin';
+        if (file.mimetype) {
+            const parts = file.mimetype.split('/');
+            if (parts.length > 1) {
+                extension = parts[1].split(';')[0];
+            }
+        }
+        return {
+            filename: file.filename || `adjunto.${extension}`,
+            content: file.data,
+            encoding: 'base64',
+            contentType: file.mimetype
+        };
+    });
+
+    const mailOptions = {
+        from: `"${data.alias}" <${data.from}>`,
+        to: data.to,
+        subject: data.subject,
+        html: data.html,
+        attachments: attachments
+    };
+
+    const mailComposer = new MailComposer(mailOptions);
+    const messageBuffer = await mailComposer.compile().build();
+    const encodedMessage = messageBuffer.toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+    const res = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+            raw: encodedMessage
+        }
+    });
+
+    console.log('Email dispatched successfully via Gmail API');
+    return { status: 200, data: res.data };
+  } catch (err: any) {
+    console.error('Error sending email:', err);
+    return { status: 500, error: err.message };
+  }
 }
 
 export async function getBase64FromEndpoint(endpoint: string) {
