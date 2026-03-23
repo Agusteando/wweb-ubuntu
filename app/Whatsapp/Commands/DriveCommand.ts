@@ -25,14 +25,15 @@ export default class DriveCommand {
         "   `!drive set <correo>:<fileId>`\n" +
         "2️⃣ *Permisos y Propietario*\n" +
         "   `!drive user <role> <tu_correo>:<fileId>:<correo_destino>`\n" +
-        "   _(Roles permitidos: viewer, commenter, editor, owner)_\n" +
+        "   _(Roles My Drive: viewer, commenter, editor, owner)_\n" +
+        "   _(Roles Shared Drive: organizer, fileorganizer)_\n" +
         "3️⃣ *Listar Archivos*\n" +
         "   `!drive list <correo>:<folderId>`\n" +
         "4️⃣ *Descargar Archivo*\n" +
         "   `!drive file <correo>:<fileId>`\n" +
-        "5️⃣ *Subir Archivo* (Citando un mensaje con archivo)\n" +
+        "5️⃣ *Subir Archivo* (Citando un mensaje)\n" +
         "   `!drive upload <correo>:<folderId>`\n\n" +
-        "💡 *Tip:* El `<correo>` debe ser una cuenta autenticada válida en tu Workspace con acceso a los recursos.";
+        "💡 *Tip:* El `<correo>` debe ser una cuenta autenticada válida en tu Workspace.";
       
       await message.reply(helpText);
       return;
@@ -73,7 +74,7 @@ export default class DriveCommand {
       }
 
       // --------------------------------------------------
-      // 🔹 USER PERMISSIONS (Incluye Transferencia de Propiedad)
+      // 🔹 USER PERMISSIONS (Incluye validación de Shared Drives)
       // --------------------------------------------------
       if (action === "user" || action === "perm") {
         const roleInput = args[2]?.toLowerCase();
@@ -83,9 +84,9 @@ export default class DriveCommand {
           return message.reply("⚠️ Uso correcto: `!drive user <role> <tu_correo>:<fileId>:<correo_destino>`");
         }
 
-        const allowedRoles = ["viewer", "commenter", "editor", "owner"];
+        const allowedRoles = ["viewer", "commenter", "editor", "owner", "organizer", "fileorganizer"];
         if (!allowedRoles.includes(roleInput)) {
-          return message.reply("⚠️ Roles válidos: `viewer | commenter | editor | owner`");
+          return message.reply("⚠️ Roles válidos: `viewer | commenter | editor | owner | organizer | fileorganizer`");
         }
 
         const parts = details.split(":");
@@ -93,7 +94,7 @@ export default class DriveCommand {
 
         const authUser = parts[0];
         const targetEmail = parts.pop();
-        const id = parts.slice(1).join(":"); // Captura IDs incluso si contienen ':' internamente
+        const id = parts.slice(1).join(":");
 
         if (!authUser || !authUser.includes("@")) return message.reply("❌ El usuario autenticado original es inválido.");
         if (!id) return message.reply("❌ Debes proporcionar el ID del archivo o carpeta.");
@@ -103,10 +104,34 @@ export default class DriveCommand {
           viewer: "reader",
           commenter: "commenter",
           editor: "writer",
-          owner: "owner"
+          owner: "owner",
+          organizer: "organizer",
+          fileorganizer: "fileOrganizer"
         };
 
         const drive = await getDriveClient(authUser);
+
+        // Validar si el archivo es parte de un Shared Drive (Unidad Compartida)
+        const fileInfo = await drive.files.get({
+          fileId: id,
+          fields: "driveId, parents",
+          supportsAllDrives: true
+        });
+
+        const isSharedDrive = !!fileInfo.data.driveId;
+
+        // Regla estricta: No se puede asignar 'owner' en un Shared Drive
+        if (isSharedDrive && roleInput === "owner") {
+          return message.reply(
+            "🛑 *Acción Denegada por Google:*\n" +
+            "Los elementos en una Unidad Compartida (Shared Drive) pertenecen a la organización, no a un usuario individual. No puedes asignar el rol `owner`.\n\n" +
+            "👉 *Soluciones:*\n" +
+            "• Si es un archivo, asígnale el rol `editor`.\n" +
+            "• Si es una carpeta, asígnale el rol `fileorganizer` o `organizer`.\n" +
+            "• Si necesitas transferir la propiedad a un individuo, debes mover el archivo a tu unidad personal ('Mi Unidad') primero."
+          );
+        }
+
         const isTransfer = roleInput === "owner";
 
         await drive.permissions.create({
@@ -124,7 +149,8 @@ export default class DriveCommand {
           `✅ Permisos actualizados exitosamente.\n\n` +
           `*Rol asignado:* ${roleInput.toUpperCase()}\n` +
           `*Usuario Beneficiado:* ${targetEmail}\n` +
-          `*ID Afectado:* \`${id}\``
+          `*ID Afectado:* \`${id}\`\n` +
+          `*Ubicación:* ${isSharedDrive ? 'Unidad Compartida 🏢' : 'Mi Unidad 👤'}`
         );
         return;
       }
