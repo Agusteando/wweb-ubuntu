@@ -16,7 +16,7 @@
   <!-- Bundled FullCalendar Core -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   
-  <script src="/whatsapp-manager/resources/js/bot.js?v=4.1.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=4.2.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -50,16 +50,17 @@
   <div id="toast-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
 
   <nav class="bg-slate-900 shadow-lg text-white shrink-0 relative z-10">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16">
         <div class="flex items-center space-x-3">
-          <div class="bg-indigo-500 p-2 rounded-lg">
+          <div class="bg-indigo-500 p-2 rounded-lg flex items-center justify-center">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
           </div>
           <span class="font-bold text-lg tracking-tight">WhatsApp Orchestrator</span>
         </div>
         <div class="flex items-center space-x-2">
           <button data-action="switch-tab" data-target="clients" id="tab-clients-btn" class="px-4 py-2 rounded-md font-medium text-sm bg-indigo-600 text-white shadow-inner transition-all">Instances</button>
+          <button data-action="switch-tab" data-target="api" id="tab-api-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">API Gateway</button>
           <button data-action="switch-tab" data-target="editor" id="tab-editor-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Logic Editor</button>
           <button data-action="switch-tab" data-target="planner" id="tab-planner-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Content Planner</button>
           <button data-action="switch-tab" data-target="analytics" id="tab-analytics-btn" class="px-4 py-2 rounded-md font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all">Status Analytics</button>
@@ -72,7 +73,7 @@
        TAB: CLIENTS
        =============================== -->
   <main id="tab-clients" class="flex-grow overflow-y-auto w-full bg-slate-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-shadow">
         <div>
           <h2 class="text-xl font-bold text-slate-800 tracking-tight flex items-center">
@@ -93,7 +94,7 @@
         </form>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="client-list">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="client-list">
         @if(!clients || clients.length === 0)
           <div class="col-span-full flex flex-col items-center justify-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
             <div class="bg-slate-50 p-4 rounded-full mb-4">
@@ -133,7 +134,7 @@
                     @else
                       @each(cmd in client.commandFiles)
                         <div class="flex items-center justify-between bg-slate-100 border border-slate-200 rounded-md pr-2 pl-3 py-1.5 group">
-                          <span class="text-xs font-semibold text-slate-700">{{ cmd }}</span>
+                          <span class="text-xs font-semibold text-slate-700 truncate mr-2">{{ cmd }}</span>
                           <button data-action="open-rules-modal" data-client="{{ client.clientId }}" data-command="{{ cmd }}" data-rules="{{ JSON.stringify(client.commandRules) }}" class="text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors" title="Manage Rules & Exceptions">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                           </button>
@@ -204,6 +205,73 @@
           @endeach
         @endif
       </div>
+    </div>
+  </main>
+
+  <!-- ===============================
+       TAB: API GATEWAY
+       =============================== -->
+  <main id="tab-api" class="hidden flex-grow w-full bg-slate-50 overflow-hidden flex flex-col">
+    <div class="px-6 py-4 border-b border-slate-200 bg-white shadow-sm flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2 rounded-lg text-indigo-600">
+           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">API Gateway</h2>
+      </div>
+      <div class="flex items-center gap-3 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
+        <span class="text-sm font-semibold text-slate-700">API Message Sending:</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="global-api-toggle" class="sr-only peer" {{ apiStatus ? 'checked' : '' }}>
+          <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+        </label>
+        <span id="api-status-label" class="text-xs font-bold uppercase tracking-wide {{ apiStatus ? 'text-emerald-600' : 'text-slate-500' }} ml-2">{{ apiStatus ? 'Enabled' : 'Disabled' }}</span>
+      </div>
+    </div>
+    
+    <div class="flex-grow p-6 overflow-hidden flex gap-6">
+       <!-- Left: Activity Log -->
+       <div class="flex flex-col w-2/3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+         <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
+           <h3 class="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center">
+             <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+             Activity Log
+           </h3>
+           <div class="flex gap-2">
+             <button id="btn-refresh-logs" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Refresh Logs">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+             </button>
+             <button id="btn-clear-logs" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Clear Logs">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+             </button>
+           </div>
+         </div>
+         <div class="flex-grow overflow-y-auto custom-scrollbar p-4 space-y-3" id="api-logs-container">
+           <div class="flex justify-center py-8"><div class="spinner spinner-dark"></div></div>
+         </div>
+       </div>
+
+       <!-- Right: Contact Directory -->
+       <div class="flex flex-col w-1/3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+         <div class="px-5 py-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-3 shrink-0">
+           <h3 class="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center">
+             <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+             Contact Directory
+           </h3>
+           <select id="directory-client-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white font-semibold outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm cursor-pointer">
+             <option value="">Select Instance...</option>
+             @each(client in clients)
+               <option value="{{ client.clientId }}">{{ client.clientId }}</option>
+             @endeach
+           </select>
+           <input type="text" id="directory-search" placeholder="Search contacts..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+         </div>
+         <div class="flex-grow overflow-y-auto custom-scrollbar p-2" id="directory-contacts-container">
+           <div class="flex items-center justify-center h-full text-sm text-slate-400 font-medium text-center px-4">
+             Select an instance to view its synchronized contacts and chat IDs.
+           </div>
+         </div>
+       </div>
     </div>
   </main>
 

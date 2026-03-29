@@ -30,11 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
     toast.innerHTML = `<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">${icon}</svg><span class="text-sm font-medium">${message}</span>`;
     container.appendChild(toast);
     requestAnimationFrame(() => { toast.classList.remove('translate-y-10', 'opacity-0'); toast.classList.add('translate-y-0', 'opacity-100'); });
-    setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3500);
+    setTimeout(() => { toast.classList.remove('translate-y-0', 'opacity-100'); toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 3500); }, 3500);
   }
 
   function switchTab(target) {
-    const tabs = ['clients', 'editor', 'planner', 'analytics'];
+    const tabs = ['clients', 'editor', 'planner', 'analytics', 'api'];
     tabs.forEach(t => {
       const el = document.getElementById(`tab-${t}`);
       const btn = document.getElementById(`tab-${t}-btn`);
@@ -63,6 +63,136 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshAnalyticsClients();
       loadAnalyticsData();
     }
+
+    if (target === 'api') {
+      if (!document.getElementById('api-logs-container').innerHTML.includes('border')) {
+        loadApiLogs();
+      }
+    }
+  }
+
+  /* --- API Gateway Logic --- */
+
+  document.getElementById('global-api-toggle')?.addEventListener('change', async (e) => {
+    const isEnabled = e.target.checked;
+    const label = document.getElementById('api-status-label');
+    try {
+      const res = await fetch('/whatsapp-manager/api/settings/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: isEnabled })
+      });
+      const data = await res.json();
+      if (data.success) {
+        label.textContent = data.apiStatus ? 'Enabled' : 'Disabled';
+        label.className = `text-xs font-bold uppercase tracking-wide ml-2 ${data.apiStatus ? 'text-emerald-600' : 'text-slate-500'}`;
+        showToast(`API Sending ${data.apiStatus ? 'Enabled' : 'Disabled'}`);
+      }
+    } catch(err) {
+      showToast('Error toggling API', 'error');
+      e.target.checked = !isEnabled;
+    }
+  });
+
+  document.getElementById('btn-refresh-logs')?.addEventListener('click', loadApiLogs);
+  document.getElementById('btn-clear-logs')?.addEventListener('click', async () => {
+    if (!confirm('Clear all API logs?')) return;
+    try {
+      const res = await fetch('/whatsapp-manager/api/logs', { method: 'DELETE' });
+      if ((await res.json()).success) {
+        loadApiLogs();
+        showToast('Logs cleared');
+      }
+    } catch(e) {}
+  });
+
+  async function loadApiLogs() {
+    const container = document.getElementById('api-logs-container');
+    if (!container) return;
+    container.innerHTML = '<div class="flex justify-center py-8"><div class="spinner spinner-dark"></div></div>';
+    try {
+      const res = await fetch('/whatsapp-manager/api/logs');
+      const data = await res.json();
+      if (!data.success || data.logs.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8 font-medium">No API activity logged yet.</div>';
+        return;
+      }
+      container.innerHTML = data.logs.map(log => `
+        <div class="bg-white border border-slate-100 shadow-sm rounded-xl p-4 flex gap-4 items-start hover:shadow-md transition-shadow relative group">
+          <div class="shrink-0 pt-1">
+            ${log.status === 'success' ? '<div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>' : 
+              log.status === 'blocked' ? '<div class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg></div>' :
+              '<div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>'}
+          </div>
+          <div class="flex-grow min-w-0">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-500 tracking-wider uppercase">${new Date(log.timestamp).toLocaleString()}</span>
+              <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${log.clientId}</span>
+            </div>
+            <p class="text-sm font-semibold text-slate-800 break-words mb-1">${log.payloadSummary}</p>
+            <p class="text-xs text-slate-500 truncate" title="${log.target}">Target: <span class="font-mono text-indigo-600">${log.target}</span></p>
+            ${log.error ? `<p class="text-xs text-red-500 mt-2 font-medium bg-red-50 p-2 rounded-lg border border-red-100">${log.error}</p>` : ''}
+          </div>
+          <button data-action="delete-log" data-id="${log.id}" class="absolute top-4 right-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+        </div>
+      `).join('');
+    } catch (e) {
+      container.innerHTML = '<div class="text-center text-red-500 text-sm py-8 font-medium">Failed to load logs.</div>';
+    }
+  }
+
+  let cachedDirectory = [];
+  document.getElementById('directory-client-select')?.addEventListener('change', async (e) => {
+    const clientId = e.target.value;
+    const container = document.getElementById('directory-contacts-container');
+    if (!clientId) {
+      container.innerHTML = '<div class="flex items-center justify-center h-full text-sm text-slate-400 font-medium text-center px-4">Select an instance to view its synchronized contacts and chat IDs.</div>';
+      cachedDirectory = [];
+      return;
+    }
+    container.innerHTML = '<div class="flex justify-center py-8"><div class="spinner spinner-dark"></div></div>';
+    try {
+      const res = await fetch(`/whatsapp-manager/api/chats/${clientId}`);
+      const data = await res.json();
+      if (data.success) {
+        cachedDirectory = data.chats;
+        renderDirectory(cachedDirectory);
+      } else {
+        container.innerHTML = '<div class="text-center text-red-500 text-sm py-8 font-medium">Failed to fetch contacts. Is the client connected?</div>';
+      }
+    } catch(err) {
+      container.innerHTML = '<div class="text-center text-red-500 text-sm py-8 font-medium">Network error.</div>';
+    }
+  });
+
+  document.getElementById('directory-search')?.addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase();
+    if (!term) return renderDirectory(cachedDirectory);
+    const filtered = cachedDirectory.filter(c => c.name.toLowerCase().includes(term) || c.id.toLowerCase().includes(term));
+    renderDirectory(filtered);
+  });
+
+  function renderDirectory(chats) {
+    const container = document.getElementById('directory-contacts-container');
+    if (chats.length === 0) {
+      container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8 font-medium">No contacts found.</div>';
+      return;
+    }
+    container.innerHTML = chats.map(c => `
+      <div class="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors rounded-lg group">
+        <div class="flex flex-col overflow-hidden w-full">
+          <div class="flex items-center gap-2 mb-0.5">
+             <span class="text-sm font-bold text-slate-700 truncate" title="${c.name}">${c.name}</span>
+             ${c.isGroup ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-100 text-purple-700">Group</span>' : ''}
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-[11px] text-slate-500 font-mono select-all">${c.id}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
   }
 
   /* --- Analytics Visualization --- */
@@ -536,6 +666,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (action === 'create-file') createEditorFile();
       if (action === 'save-file') saveCurrentEditorFile();
       if (action === 'open-file') openEditorFile(actionBtn.dataset.filename);
+
+      // API Logs
+      if (action === 'delete-log') {
+         fetch(`/whatsapp-manager/api/logs/${actionBtn.dataset.id}`, { method: 'DELETE' })
+         .then(r => r.json())
+         .then(d => { if(d.success) loadApiLogs(); })
+         .catch(()=>{});
+      }
     }
     
     // Action Tabs UI (Client Quick Actions)

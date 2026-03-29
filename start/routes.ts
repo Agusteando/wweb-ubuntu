@@ -31,6 +31,12 @@ Route.group(() => {
   Route.delete('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.deleteSchedule')
   Route.post('/whatsapp-manager/api/schedules/:clientId/bulk', 'BotController.bulkImportSchedules')
 
+  // API Gateway Routes
+  Route.get('/whatsapp-manager/api/logs', 'BotController.getApiLogs')
+  Route.delete('/whatsapp-manager/api/logs', 'BotController.clearApiLogs')
+  Route.delete('/whatsapp-manager/api/logs/:id', 'BotController.deleteApiLog')
+  Route.post('/whatsapp-manager/api/settings/toggle', 'BotController.toggleApiStatus')
+
 }).middleware('auth') // Applying Native Browser Protection
 
 // ==========================================

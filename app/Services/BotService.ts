@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import CommandRegistry from 'App/Services/CommandRegistry'
 import Env from '@ioc:Adonis/Core/Env'
+import { v4 as uuidv4 } from 'uuid'
 
 export interface ClientConfig {
   clientId: string;
@@ -16,12 +17,28 @@ export interface ClientHealth {
   lastRecoveryAttempt: number;
 }
 
+export interface ApiLog {
+  id: string;
+  timestamp: number;
+  clientId: string;
+  endpoint: string;
+  method: string;
+  status: 'success' | 'error' | 'blocked';
+  target: string;
+  payloadSummary: string;
+  error?: string;
+}
+
 export default class BotService {
   public clients: Map<string, Client> = new Map()
   public qrCodes: Map<string, string | null> = new Map()
   public statuses: Map<string, 'pending' | 'ready' | 'error'> = new Map()
   public configs: Map<string, ClientConfig> = new Map()
   public healthData: Map<string, ClientHealth> = new Map()
+  
+  // Global API configurations
+  public apiStatus: boolean = true
+  public apiLogs: ApiLog[] = []
   
   private dataDir: string
   private authDir: string
@@ -50,6 +67,12 @@ export default class BotService {
     try {
       const data = await fs.readFile(this.registryFile, 'utf-8')
       const parsed = JSON.parse(data)
+
+      if (parsed.__global_settings__) {
+        this.apiStatus = parsed.__global_settings__.apiStatus ?? true
+        delete parsed.__global_settings__
+      }
+
       for (const [clientId, config] of Object.entries(parsed)) {
         const rehydratedConfig = config as any
         if (typeof rehydratedConfig.commandFile !== 'undefined') {
@@ -68,6 +91,18 @@ export default class BotService {
 
     // Begin the background health supervisor
     this.supervisorInterval = setInterval(() => this.runHealthChecks(), 60000)
+  }
+
+  public logApi(logData: Omit<ApiLog, 'id' | 'timestamp'>) {
+    const log: ApiLog = {
+      ...logData,
+      id: uuidv4(),
+      timestamp: Date.now()
+    }
+    this.apiLogs.unshift(log)
+    if (this.apiLogs.length > 200) {
+      this.apiLogs.pop()
+    }
   }
 
   public async shutdown() {
@@ -101,7 +136,8 @@ export default class BotService {
   }
 
   public async saveRegistry() {
-    const data = Object.fromEntries(this.configs)
+    const data: any = Object.fromEntries(this.configs)
+    data.__global_settings__ = { apiStatus: this.apiStatus }
     await fs.writeFile(this.registryFile, JSON.stringify(data, null, 2), 'utf-8')
   }
 

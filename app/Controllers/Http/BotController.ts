@@ -1,4 +1,3 @@
-// filepath: app/Controllers/Http/BotController.ts
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import Env from '@ioc:Adonis/Core/Env'
@@ -35,7 +34,8 @@ export default class BotController {
       clients: clientsData, 
       commandFiles, 
       commandFilesJson: JSON.stringify(commandFiles),
-      modulesMetadataJson: JSON.stringify(modulesMetadata)
+      modulesMetadataJson: JSON.stringify(modulesMetadata),
+      apiStatus: this.botService.apiStatus
     })
   }
 
@@ -216,6 +216,29 @@ export default class BotController {
     }
   }
 
+  // ==== API Gateway & Settings Methods ====
+
+  public async getApiLogs({ response }: HttpContextContract) {
+    return response.json({ success: true, logs: this.botService.apiLogs })
+  }
+
+  public async clearApiLogs({ response }: HttpContextContract) {
+    this.botService.apiLogs = []
+    return response.json({ success: true })
+  }
+
+  public async deleteApiLog({ params, response }: HttpContextContract) {
+    this.botService.apiLogs = this.botService.apiLogs.filter(l => l.id !== params.id)
+    return response.json({ success: true })
+  }
+
+  public async toggleApiStatus({ request, response }: HttpContextContract) {
+    const { status } = request.all()
+    this.botService.apiStatus = status === true || status === 'true'
+    await this.botService.saveRegistry()
+    return response.json({ success: true, apiStatus: this.botService.apiStatus })
+  }
+
   // ==========================
 
   public async add({ request, response }: HttpContextContract) {
@@ -294,9 +317,31 @@ export default class BotController {
     let clientId = params.clientId;
     let client;
 
+    if (!this.botService.apiStatus) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'blocked',
+        target: String(request.input('chatId') || 'unknown'),
+        payloadSummary: `API Disabled. Blocked request.`,
+        error: 'API message sending is globally disabled.'
+      });
+      return response.status(403).json({ status: 'error', error: 'API message sending is currently disabled in the orchestrator.' });
+    }
+
     if (!clientId || clientId.toLowerCase() === 'any') {
       const readyClient = this.botService.getAnyReadyClient();
       if (!readyClient) {
+        this.botService.logApi({
+          clientId: 'any',
+          endpoint: request.url(),
+          method: request.method(),
+          status: 'error',
+          target: String(request.input('chatId') || 'unknown'),
+          payloadSummary: `Message dispatch failed`,
+          error: 'No WhatsApp clients are currently connected or ready.'
+        });
         return response.status(400).json({ status: 'error', error: 'No WhatsApp clients are currently connected or ready to handle requests.' });
       }
       client = readyClient.client;
@@ -304,6 +349,15 @@ export default class BotController {
     } else {
       client = this.botService.clients.get(clientId);
       if (!client || this.botService.statuses.get(clientId) !== 'ready') {
+        this.botService.logApi({
+          clientId,
+          endpoint: request.url(),
+          method: request.method(),
+          status: 'error',
+          target: String(request.input('chatId') || 'unknown'),
+          payloadSummary: `Message dispatch failed`,
+          error: `WhatsApp client '${clientId}' is not connected or ready.`
+        });
         return response.status(400).json({ status: 'error', error: `WhatsApp client '${clientId}' is not connected or ready.` });
       }
     }
@@ -380,8 +434,34 @@ export default class BotController {
         }
       }
 
+      const success = sentMessages.length > 0;
+      let summaryText = '';
+      if (typeof message === 'string') summaryText = message.substring(0, 100);
+      else if (caption) summaryText = caption.substring(0, 100);
+      else if (filename || mimetype) summaryText = `Media: ${filename || mimetype}`;
+      else summaryText = 'Media Payload';
+
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: success ? 'success' : 'error',
+        target: chatId.join(', '),
+        payloadSummary: summaryText,
+        error: success ? undefined : 'Failed to dispatch to one or more targets.'
+      });
+
       return response.json({ status: 'ok', success: true, clientUsed: clientId, messages: sentMessages });
     } catch (error: any) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'error',
+        target: String(chatId || request.input('chatId') || 'unknown'),
+        payloadSummary: 'Failed request',
+        error: error.message || 'An error occurred while sending messages'
+      });
       return response.status(500).json({ status: 'error', success: false, error: error.message || 'An error occurred while sending messages' });
     }
   }
@@ -390,6 +470,19 @@ export default class BotController {
   public async postStatus({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
+
+    if (!this.botService.apiStatus) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'blocked',
+        target: 'status@broadcast',
+        payloadSummary: `Status Post Blocked.`,
+        error: 'API message sending is globally disabled.'
+      });
+      return response.status(403).json({ status: 'error', error: 'API message sending is disabled.' });
+    }
 
     if (!clientId || clientId.toLowerCase() === 'any') {
       const readyClient = this.botService.getAnyReadyClient();
@@ -432,6 +525,15 @@ export default class BotController {
             statusMessageId: messageId
         });
         
+        this.botService.logApi({
+          clientId: clientId,
+          endpoint: request.url(),
+          method: request.method(),
+          status: 'success',
+          target: 'status@broadcast',
+          payloadSummary: `Text Story: ${statusText.substring(0, 100)}`
+        });
+
         return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
         
       } else {
@@ -470,9 +572,27 @@ export default class BotController {
             statusMessageId: messageId
         });
 
+        this.botService.logApi({
+          clientId: clientId,
+          endpoint: request.url(),
+          method: request.method(),
+          status: 'success',
+          target: 'status@broadcast',
+          payloadSummary: `Media Story: ${caption ? caption.substring(0, 100) : file.clientName}`
+        });
+
         return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
       }
     } catch (error: any) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'error',
+        target: 'status@broadcast',
+        payloadSummary: 'Status Post Failed',
+        error: error.message
+      });
       return response.status(500).json({ status: 'error', success: false, error: error.message });
     }
   }
@@ -480,6 +600,19 @@ export default class BotController {
   public async editMessage({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
+
+    if (!this.botService.apiStatus) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'blocked',
+        target: 'Edit Request',
+        payloadSummary: `Message Edit Blocked.`,
+        error: 'API is globally disabled.'
+      });
+      return response.status(403).json({ status: 'error', error: 'API message sending is disabled.' });
+    }
 
     if (!clientId || clientId.toLowerCase() === 'any') {
       const readyClient = this.botService.getAnyReadyClient();
@@ -504,6 +637,15 @@ export default class BotController {
       const edited = await msg.edit(content, options);
       if (!edited) return response.json({ status: 'ok', success: true, message: null });
 
+      this.botService.logApi({
+        clientId,
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'success',
+        target: edited.to,
+        payloadSummary: `Edited: ${content.substring(0, 100)}`
+      });
+
       return response.json({
         status: 'ok',
         success: true,
@@ -511,6 +653,15 @@ export default class BotController {
         message: { id: edited.id?._serialized ?? edited.id, chatId: edited.to, timestamp: edited.timestamp },
       });
     } catch (error: any) {
+      this.botService.logApi({
+        clientId,
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'error',
+        target: 'Edit Request',
+        payloadSummary: 'Edit Failed',
+        error: error.message
+      });
       return response.status(500).json({ status: 'error', success: false, error: error.message });
     }
   }
