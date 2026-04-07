@@ -23,4 +23,8 @@ export default Env.rules({
   
   ADMIN_USERNAME: Env.schema.string(),
   ADMIN_PASSWORD: Env.schema.string(),
+
+  // Buena Infancia Scraping Credentials
+  BUENAINFANCIA_USERNAME: Env.schema.string.optional(),
+  BUENAINFANCIA_PASSWORD: Env.schema.string.optional(),
 })
