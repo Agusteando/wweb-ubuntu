@@ -27,4 +27,10 @@ export default Env.rules({
   // Buena Infancia Scraping Credentials
   BUENAINFANCIA_USERNAME: Env.schema.string.optional(),
   BUENAINFANCIA_PASSWORD: Env.schema.string.optional(),
+
+  // MySQL Database Config
+  DB_HOST: Env.schema.string.optional(),
+  DB_USER: Env.schema.string.optional(),
+  DB_PASSWORD: Env.schema.string.optional(),
+  DB_DATABASE: Env.schema.string.optional(),
 })
