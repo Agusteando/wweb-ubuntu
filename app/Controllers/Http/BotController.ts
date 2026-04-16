@@ -1,3 +1,4 @@
+filepath: app/Controllers/Http/BotController.ts
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import Env from '@ioc:Adonis/Core/Env'
@@ -416,8 +417,11 @@ export default class BotController {
         args.caption = message;
       }
 
-      if (mentions) {
-        for (let i = 0; i < mentions.length; i++) contacts.push(mentions[i] + '@c.us');
+      if (mentions && Array.isArray(mentions)) {
+        for (let i = 0; i < mentions.length; i++) {
+          const mentionStr = String(mentions[i]).trim();
+          contacts.push(mentionStr.includes('@') ? mentionStr : `${mentionStr}@c.us`);
+        }
         args.mentions = contacts;
       }
 
