@@ -1,4 +1,3 @@
-filepath: app/Controllers/Http/BotController.ts
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Application from '@ioc:Adonis/Core/Application'
 import Env from '@ioc:Adonis/Core/Env'
@@ -90,7 +89,7 @@ export default class BotController {
       // Enrich schedules with true view counts dynamically if the client is connected
       if (client && this.botService.statuses.get(params.clientId) === 'ready') {
         let changed = false;
-        await Promise.all(schedules.map(async (s) => {
+        await Promise.all(schedules.map(async (s: any) => {
           if (s.statusMessageId) {
             try {
               const msg = await client.getMessageById(s.statusMessageId)
