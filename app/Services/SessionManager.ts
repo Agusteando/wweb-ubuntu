@@ -6,6 +6,7 @@ export interface UserSession {
   waiting: boolean;
   cmd: string | null;
   remember: any;
+  ticketState: string | null;
   [key: string]: any;
 }
 
@@ -22,6 +23,7 @@ class SessionManager {
         waiting: false,
         cmd: null,
         remember: null,
+        ticketState: null,
       });
     }
     return this.sessions.get(userId)!;
@@ -33,7 +35,7 @@ class SessionManager {
   }
 
   public clearInteraction(userId: string) {
-    this.update(userId, { waiting: false, cmd: null, remember: null });
+    this.update(userId, { waiting: false, cmd: null, remember: null, ticketState: null });
   }
 }
 
