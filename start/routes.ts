@@ -28,6 +28,7 @@ Route.group(() => {
   Route.get('/whatsapp-manager/api/schedules/:clientId', 'BotController.getSchedules')
   Route.post('/whatsapp-manager/api/schedules/:clientId', 'BotController.createSchedule')
   Route.put('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.updateSchedule')
+  Route.delete('/whatsapp-manager/api/schedules/:clientId/all', 'BotController.deleteAllSchedules')
   Route.delete('/whatsapp-manager/api/schedules/:clientId/:id', 'BotController.deleteSchedule')
   Route.post('/whatsapp-manager/api/schedules/:clientId/bulk', 'BotController.bulkImportSchedules')
 

@@ -1,4 +1,3 @@
-// filepath: app/Services/ScheduleService.ts
 import { promises as fs } from 'fs'
 import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
@@ -253,6 +252,11 @@ export default class ScheduleService {
 
   public async deleteSchedule(clientId: string, id: string) {
     this.schedules = this.schedules.filter(s => !(s.id === id && s.clientId === clientId))
+    await this.save()
+  }
+
+  public async deleteAllSchedules(clientId: string) {
+    this.schedules = this.schedules.filter(s => s.clientId !== clientId)
     await this.save()
   }
 

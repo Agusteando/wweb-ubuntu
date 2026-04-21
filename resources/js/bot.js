@@ -641,6 +641,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (action === 'close-bulk-modal') toggleModal('bulk-import-modal', false);
       if (action === 'close-view-schedule-modal') toggleModal('view-schedule-modal', false);
 
+      if (action === 'clear-all-schedules') {
+        const clientId = document.getElementById('planner-client-select').value;
+        if (!clientId) return showToast('Seleccione una instancia primero', 'error');
+        if (!confirm('¿Está seguro de que desea eliminar todos los eventos programados para esta instancia? Esta acción no se puede deshacer.')) return;
+        
+        fetch(`/whatsapp-manager/api/schedules/${clientId}/all`, { method: 'DELETE' })
+          .then(r => r.json())
+          .then(d => {
+            if (d.success) {
+              showToast('Todos los eventos han sido eliminados');
+              if (state.calendarInstance) state.calendarInstance.refetchEvents();
+            } else {
+              showToast('Error al eliminar eventos', 'error');
+            }
+          }).catch(() => showToast('Error de red', 'error'));
+      }
+
       if (action === 'toggle-actions') {
         const panel = document.getElementById(`actions-${actionBtn.dataset.client}`);
         if (panel) panel.classList.toggle('hidden');

@@ -206,6 +206,15 @@ export default class BotController {
     }
   }
 
+  public async deleteAllSchedules({ params, response }: HttpContextContract) {
+    try {
+      await this.scheduleService.deleteAllSchedules(params.clientId)
+      return response.json({ success: true })
+    } catch (e: any) {
+      return response.status(500).json({ success: false, error: e.message })
+    }
+  }
+
   public async bulkImportSchedules({ params, request, response }: HttpContextContract) {
     try {
       const { items } = request.all()

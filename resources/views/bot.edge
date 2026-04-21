@@ -15,7 +15,7 @@
   <!-- Bundled FullCalendar Core -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   
-  <script src="/whatsapp-manager/resources/js/bot.js?v=4.3.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=4.4.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -329,7 +329,11 @@
         <select id="planner-client-select" class="px-4 py-2 border border-slate-300 rounded-xl text-sm bg-slate-50 font-semibold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm cursor-pointer min-w-[220px] transition-all">
           <option value="">Seleccionar Instancia...</option>
         </select>
-        <div class="w-px h-8 bg-slate-200 mx-2"></div>
+        <div class="w-px h-8 bg-slate-200 mx-1"></div>
+        <button data-action="clear-all-schedules" class="px-5 py-2.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          Limpiar Todo
+        </button>
         <button data-action="open-bulk-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
           <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
           Importar Lote
@@ -405,33 +409,36 @@
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
-      <div class="p-8 flex-grow overflow-hidden flex flex-col">
-        <form id="commands-form" class="h-full flex flex-col">
+      <div class="p-8 flex-grow overflow-hidden flex flex-col min-h-0">
+        <form id="commands-form" class="h-full flex flex-col min-h-0">
           <input type="hidden" id="modal-client-id" name="clientId">
           
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto custom-scrollbar flex-grow pr-2">
-            <!-- Columna Comandos -->
-            <div>
-              <h4 class="text-sm font-extrabold text-indigo-700 uppercase tracking-wider mb-4 flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M4 15h16a1 1 0 001-1V6a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1z"></path></svg>
-                Comandos (Activos)
-              </h4>
-              <p class="text-xs text-slate-500 mb-4 font-medium">Responden a palabras clave específicas (ej. !ayuda).</p>
-              <div class="space-y-3" id="modal-commands-list"></div>
-            </div>
-            
-            <!-- Columna Automatizaciones -->
-            <div>
-              <h4 class="text-sm font-extrabold text-emerald-600 uppercase tracking-wider mb-4 flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                Automatizaciones (Pasivas)
-              </h4>
-              <p class="text-xs text-slate-500 mb-4 font-medium">Reaccionan en segundo plano a eventos o tipos de mensaje.</p>
-              <div class="space-y-3" id="modal-automations-list"></div>
+          <!-- Contenedor con Scroll para las listas de asignación -->
+          <div class="overflow-y-auto custom-scrollbar flex-grow pr-4 pb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <!-- Columna Comandos -->
+              <div>
+                <h4 class="text-sm font-extrabold text-indigo-700 uppercase tracking-wider mb-4 flex items-center">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M4 15h16a1 1 0 001-1V6a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1z"></path></svg>
+                  Comandos (Activos)
+                </h4>
+                <p class="text-xs text-slate-500 mb-4 font-medium">Responden a palabras clave específicas (ej. !ayuda).</p>
+                <div class="space-y-3" id="modal-commands-list"></div>
+              </div>
+              
+              <!-- Columna Automatizaciones -->
+              <div>
+                <h4 class="text-sm font-extrabold text-emerald-600 uppercase tracking-wider mb-4 flex items-center">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  Automatizaciones (Pasivas)
+                </h4>
+                <p class="text-xs text-slate-500 mb-4 font-medium">Reaccionan en segundo plano a eventos o tipos de mensaje.</p>
+                <div class="space-y-3" id="modal-automations-list"></div>
+              </div>
             </div>
           </div>
 
-          <div class="mt-8 flex justify-end gap-3 pt-6 border-t border-slate-100 shrink-0">
+          <div class="mt-4 flex justify-end gap-3 pt-6 border-t border-slate-100 shrink-0">
             <button type="submit" class="px-8 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-all flex items-center">
               Guardar Configuración
             </button>
