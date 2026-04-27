@@ -40,6 +40,22 @@ Route.group(() => {
 
 }).middleware('auth') // Applying Native Browser Protection
 
+// Versioned external integration API. Each handler performs bearer/admin auth
+// so third-party systems can connect without browser Basic Auth.
+Route.group(() => {
+  Route.get('/instances', 'BotController.integrationListInstances')
+  Route.post('/instances', 'BotController.integrationRegisterInstance')
+  Route.get('/instances/:clientId', 'BotController.integrationGetInstance')
+  Route.patch('/instances/:clientId/configuration', 'BotController.integrationConfigureInstance')
+  Route.post('/instances/:clientId/reconnect', 'BotController.integrationReconnectInstance')
+  Route.post('/instances/:clientId/token/rotate', 'BotController.integrationRotateToken')
+  Route.get('/instances/:clientId/status', 'BotController.integrationGetStatus')
+  Route.get('/instances/:clientId/qr', 'BotController.integrationGetQr')
+  Route.get('/instances/:clientId/qr/stream', 'BotController.integrationQrStream')
+  Route.post('/instances/:clientId/messages', 'BotController.integrationSendMessage')
+  Route.post('/instances/:clientId/stories', 'BotController.integrationPostStory')
+}).prefix('/whatsapp-manager/integration/v1')
+
 // ==========================================
 // PUBLIC STABLE & DYNAMIC API ENDPOINTS
 // ==========================================

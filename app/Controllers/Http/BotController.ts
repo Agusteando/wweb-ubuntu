@@ -7,6 +7,16 @@ import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
 
+type IntegrationAuthContext = {
+  scope: 'admin' | 'instance';
+  clientId?: string;
+}
+
+type DispatchResult = {
+  statusCode: number;
+  body: any;
+}
+
 export default class BotController {
   private get botService(): BotService {
     return Application.container.use('App/Services/BotService') as BotService
@@ -16,14 +26,106 @@ export default class BotController {
     return Application.container.use('App/Services/ScheduleService')
   }
 
-  public async index({ view }: HttpContextContract) {
+  private getIntegrationBaseUrl(request: HttpContextContract['request']): string {
+    const configured = Env.get('INTEGRATION_PUBLIC_BASE_URL')
+    if (configured) return configured.replace(/\/+$/, '')
+
+    const forwardedProto = request.header('x-forwarded-proto')
+    const protocol = forwardedProto || ((request as any).protocol ? (request as any).protocol() : 'http')
+    const forwardedHost = request.header('x-forwarded-host')
+    const host = forwardedHost || request.header('host') || `localhost:${Env.get('PORT')}`
+
+    return `${protocol}://${host}`.replace(/\/+$/, '')
+  }
+
+  private jsonError(response: HttpContextContract['response'], statusCode: number, code: string, message: string, details?: any) {
+    return response.status(statusCode).json({
+      status: 'error',
+      success: false,
+      error: {
+        code,
+        message,
+        details
+      }
+    })
+  }
+
+  private parseBearerToken(request: HttpContextContract['request']): string | null {
+    const authHeader = request.header('authorization')
+    if (!authHeader) return null
+
+    const [scheme, ...tokenParts] = authHeader.split(' ')
+    if (scheme.toLowerCase() !== 'bearer') return null
+
+    return tokenParts.join(' ').trim() || null
+  }
+
+  private isValidBasicAuth(request: HttpContextContract['request']): boolean {
+    const authHeader = request.header('authorization')
+    if (!authHeader || !authHeader.toLowerCase().startsWith('basic ')) return false
+
+    try {
+      const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii')
+      const separatorIndex = credentials.indexOf(':')
+      if (separatorIndex === -1) return false
+
+      const username = credentials.slice(0, separatorIndex)
+      const password = credentials.slice(separatorIndex + 1)
+
+      return username === Env.get('ADMIN_USERNAME') && password === Env.get('ADMIN_PASSWORD')
+    } catch (error) {
+      return false
+    }
+  }
+
+  private authorizeIntegrationRequest(request: HttpContextContract['request'], clientId?: string, adminOnly = false): IntegrationAuthContext | null {
+    if (this.isValidBasicAuth(request)) {
+      return { scope: 'admin' }
+    }
+
+    const token = this.parseBearerToken(request)
+    if (!token) return null
+
+    if (this.botService.verifyAdminIntegrationToken(token)) {
+      return { scope: 'admin' }
+    }
+
+    if (!adminOnly && clientId && this.botService.verifyIntegrationToken(clientId, token)) {
+      return { scope: 'instance', clientId }
+    }
+
+    return null
+  }
+
+  private validateClientId(clientId: string) {
+    if (!/^[A-Za-z0-9_-]{3,64}$/.test(clientId)) {
+      throw new Error('clientId must be 3-64 characters and may only contain letters, numbers, underscores, or dashes')
+    }
+  }
+
+  private validateCommandFiles(commandFiles?: string[]) {
+    if (!commandFiles) return
+    if (!Array.isArray(commandFiles)) throw new Error('commandFiles must be an array')
+
+    const available = new Set(CommandRegistry.getAvailableFiles())
+    const invalid = commandFiles.filter((file) => !available.has(file))
+    if (invalid.length) {
+      throw new Error(`Unknown command file(s): ${invalid.join(', ')}`)
+    }
+  }
+
+  public async index({ view, request }: HttpContextContract) {
+    const integrationBaseUrl = this.getIntegrationBaseUrl(request)
     const clientsData = Array.from(this.botService.statuses.entries()).map(([clientId, status]) => {
       const config = this.botService.configs.get(clientId)
+      const integrationDetails = this.botService.getIntegrationDetails(clientId, integrationBaseUrl, true)
       return {
         clientId,
         status: this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR')),
         commandFiles: config?.commandFiles || [],
-        commandRules: config?.commandRules || {}
+        commandRules: config?.commandRules || {},
+        integration: integrationDetails,
+        recentActivity: this.botService.getRecentLogs(clientId, 5)
       }
     })
     
@@ -35,6 +137,7 @@ export default class BotController {
       commandFiles, 
       commandFilesJson: JSON.stringify(commandFiles),
       modulesMetadataJson: JSON.stringify(modulesMetadata),
+      integrationBaseUrl,
       apiStatus: this.botService.apiStatus
     })
   }
@@ -322,9 +425,9 @@ export default class BotController {
     }
   }
 
-  public async sendMessages({ request, response, params }: HttpContextContract) {
-    let clientId = params.clientId;
-    let client;
+  private async dispatchMessages(request: HttpContextContract['request'], requestedClientId?: string): Promise<DispatchResult> {
+    let clientId = requestedClientId
+    let client: any
 
     if (!this.botService.apiStatus) {
       this.botService.logApi({
@@ -335,12 +438,15 @@ export default class BotController {
         target: String(request.input('chatId') || 'unknown'),
         payloadSummary: `API Disabled. Blocked request.`,
         error: 'API message sending is globally disabled.'
-      });
-      return response.status(403).json({ status: 'error', error: 'API message sending is currently disabled in the orchestrator.' });
+      })
+      return {
+        statusCode: 403,
+        body: { status: 'error', success: false, error: 'API message sending is currently disabled in the orchestrator.' }
+      }
     }
 
     if (!clientId || clientId.toLowerCase() === 'any') {
-      const readyClient = this.botService.getAnyReadyClient();
+      const readyClient = this.botService.getAnyReadyClient()
       if (!readyClient) {
         this.botService.logApi({
           clientId: 'any',
@@ -350,13 +456,16 @@ export default class BotController {
           target: String(request.input('chatId') || 'unknown'),
           payloadSummary: `Message dispatch failed`,
           error: 'No WhatsApp clients are currently connected or ready.'
-        });
-        return response.status(400).json({ status: 'error', error: 'No WhatsApp clients are currently connected or ready to handle requests.' });
+        })
+        return {
+          statusCode: 400,
+          body: { status: 'error', success: false, error: 'No WhatsApp clients are currently connected or ready to handle requests.' }
+        }
       }
-      client = readyClient.client;
-      clientId = readyClient.id;
+      client = readyClient.client
+      clientId = readyClient.id
     } else {
-      client = this.botService.clients.get(clientId);
+      client = this.botService.clients.get(clientId)
       if (!client || this.botService.statuses.get(clientId) !== 'ready') {
         this.botService.logApi({
           clientId,
@@ -366,8 +475,11 @@ export default class BotController {
           target: String(request.input('chatId') || 'unknown'),
           payloadSummary: `Message dispatch failed`,
           error: `WhatsApp client '${clientId}' is not connected or ready.`
-        });
-        return response.status(400).json({ status: 'error', error: `WhatsApp client '${clientId}' is not connected or ready.` });
+        })
+        return {
+          statusCode: 400,
+          body: { status: 'error', success: false, error: `WhatsApp client '${clientId}' is not connected or ready.` }
+        }
       }
     }
 
@@ -380,78 +492,79 @@ export default class BotController {
       mimetype,
       options,
       filename,
-    } = request.all();
+    } = request.all()
 
-    const args: any = {};
-    let contacts: string[] = [];
+    const args: any = {}
+    let contacts: string[] = []
 
     try {
-      if (typeof chatId === 'string') chatId = [chatId];
-      if (!chatId || !Array.isArray(chatId) || !chatId.length) throw new Error('chatId is undefined, not an array, or empty');
+      if (typeof chatId === 'string') chatId = [chatId]
+      if (!chatId || !Array.isArray(chatId) || !chatId.length) throw new Error('chatId is undefined, not an array, or empty')
 
       for (const id of chatId) {
-        if (typeof id !== 'string' || !id.includes('@')) throw new Error(`Invalid chatId format: ${id}`);
+        if (typeof id !== 'string' || !id.includes('@')) throw new Error(`Invalid chatId format: ${id}`)
       }
 
       if (filepath) {
-        const media = await MessageMedia.fromFilePath(filepath);
-        if (filename) media.filename = filename;
-        if (caption) args.caption = caption;
-        message = media;
+        const media = await MessageMedia.fromFilePath(filepath)
+        if (filename) media.filename = filename
+        if (caption) args.caption = caption
+        message = media
       } else {
-        const uploadedFile = request.file('file');
+        const uploadedFile = request.file('file')
         if (uploadedFile) {
-          const sessionDir = Env.get('WA_SESSION_DIR');
-          if (!sessionDir) throw new Error('WA_SESSION_DIR missing');
-          const customTempDir = path.join(sessionDir, 'uploads');
-          if (!fs.existsSync(customTempDir)) fs.mkdirSync(customTempDir, { recursive: true });
+          const sessionDir = Env.get('WA_SESSION_DIR')
+          if (!sessionDir) throw new Error('WA_SESSION_DIR missing')
+          const customTempDir = path.join(sessionDir, 'uploads')
+          if (!fs.existsSync(customTempDir)) fs.mkdirSync(customTempDir, { recursive: true })
 
-          await uploadedFile.move(customTempDir, { name: uploadedFile.clientName, overwrite: true });
-          const tempFilePath = path.join(customTempDir, uploadedFile.clientName);
+          await uploadedFile.move(customTempDir, { name: uploadedFile.clientName, overwrite: true })
+          const tempFilePath = path.join(customTempDir, uploadedFile.clientName)
 
-          const media = await MessageMedia.fromFilePath(tempFilePath);
-          media.filename = uploadedFile.clientName;
-          args.mimetype = uploadedFile.headers['content-type'] || mimetype;
+          const media = await MessageMedia.fromFilePath(tempFilePath)
+          media.filename = uploadedFile.clientName
+          args.mimetype = uploadedFile.headers['content-type'] || mimetype
 
-          if (caption) args.caption = caption;
-          message = media;
-          fs.unlinkSync(tempFilePath);
+          if (caption) args.caption = caption
+          message = media
+          fs.unlinkSync(tempFilePath)
         }
       }
 
       if (!message) {
-        message = caption || message;
+        message = caption || message
       } else if (typeof message === 'string') {
-        args.caption = message;
+        args.caption = message
       }
+      if (!message) throw new Error('message, caption, filepath, or file is required')
 
       if (mentions && Array.isArray(mentions)) {
         for (let i = 0; i < mentions.length; i++) {
-          const mentionStr = String(mentions[i]).trim();
-          contacts.push(mentionStr.includes('@') ? mentionStr : `${mentionStr}@c.us`);
+          const mentionStr = String(mentions[i]).trim()
+          contacts.push(mentionStr.includes('@') ? mentionStr : `${mentionStr}@c.us`)
         }
-        args.mentions = contacts;
+        args.mentions = contacts
       }
 
-      if (options && typeof options === 'object') Object.assign(args, options);
+      if (options && typeof options === 'object') Object.assign(args, options)
 
-      const sentMessages: any[] = [];
+      const sentMessages: any[] = []
       for (let i = 0; i < chatId.length; i++) {
-        const currentChatId = chatId[i];
+        const currentChatId = chatId[i]
         try {
-          const result = await client.sendMessage(currentChatId, message, args);
-          sentMessages.push({ chatId: currentChatId, id: result.id?._serialized ?? result.id, timestamp: result.timestamp });
+          const result = await client.sendMessage(currentChatId, message, args)
+          sentMessages.push({ chatId: currentChatId, id: result.id?._serialized ?? result.id, timestamp: result.timestamp })
         } catch (sendMessageError) {
-          console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError);
+          console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError)
         }
       }
 
-      const success = sentMessages.length > 0;
-      let summaryText = '';
-      if (typeof message === 'string') summaryText = message.substring(0, 100);
-      else if (caption) summaryText = caption.substring(0, 100);
-      else if (filename || mimetype) summaryText = `Media: ${filename || mimetype}`;
-      else summaryText = 'Media Payload';
+      const success = sentMessages.length > 0
+      let summaryText = ''
+      if (typeof message === 'string') summaryText = message.substring(0, 100)
+      else if (caption) summaryText = caption.substring(0, 100)
+      else if (filename || mimetype) summaryText = `Media: ${filename || mimetype}`
+      else summaryText = 'Media Payload'
 
       this.botService.logApi({
         clientId: clientId || 'any',
@@ -461,9 +574,12 @@ export default class BotController {
         target: chatId.join(', '),
         payloadSummary: summaryText,
         error: success ? undefined : 'Failed to dispatch to one or more targets.'
-      });
+      })
 
-      return response.json({ status: 'ok', success: true, clientUsed: clientId, messages: sentMessages });
+      return {
+        statusCode: success ? 200 : 500,
+        body: { status: success ? 'ok' : 'error', success, clientUsed: clientId, messages: sentMessages, error: success ? undefined : 'Failed to dispatch to one or more targets.' }
+      }
     } catch (error: any) {
       this.botService.logApi({
         clientId: clientId || 'any',
@@ -473,9 +589,17 @@ export default class BotController {
         target: String(chatId || request.input('chatId') || 'unknown'),
         payloadSummary: 'Failed request',
         error: error.message || 'An error occurred while sending messages'
-      });
-      return response.status(500).json({ status: 'error', success: false, error: error.message || 'An error occurred while sending messages' });
+      })
+      return {
+        statusCode: 500,
+        body: { status: 'error', success: false, error: error.message || 'An error occurred while sending messages' }
+      }
     }
+  }
+
+  public async sendMessages({ request, response, params }: HttpContextContract) {
+    const result = await this.dispatchMessages(request, params.clientId)
+    return response.status(result.statusCode).json(result.body)
   }
 
   // Live Quick Action endpoint explicitly resolving real status broadcasting logic natively
@@ -676,6 +800,233 @@ export default class BotController {
       });
       return response.status(500).json({ status: 'error', success: false, error: error.message });
     }
+  }
+
+  public async integrationListInstances({ request, response }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, undefined, true)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid admin bearer token or manager Basic Auth credentials are required.')
+
+    return response.json({
+      status: 'ok',
+      success: true,
+      instances: this.botService.listIntegrationDetails(this.getIntegrationBaseUrl(request))
+    })
+  }
+
+  public async integrationRegisterInstance({ request, response }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, undefined, true)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid admin bearer token or manager Basic Auth credentials are required.')
+
+    try {
+      const payload = request.all()
+      const clientId = payload.clientId ? String(payload.clientId).trim() : undefined
+      if (clientId) this.validateClientId(clientId)
+      this.validateCommandFiles(payload.commandFiles)
+
+      const idempotencyKey = request.header('idempotency-key') || payload.idempotencyKey
+      const result = await this.botService.registerIntegrationClient({
+        clientId,
+        externalClientId: payload.externalClientId,
+        displayName: payload.displayName,
+        commandFiles: payload.commandFiles,
+        commandRules: payload.commandRules,
+        webhookUrl: payload.webhookUrl,
+        allowedOrigins: payload.allowedOrigins,
+        metadata: payload.metadata,
+        idempotencyKey
+      })
+      const instance = this.botService.getIntegrationDetails(result.clientId, this.getIntegrationBaseUrl(request), true)
+
+      return response.status(result.created ? 201 : 200).json({
+        status: 'ok',
+        success: true,
+        created: result.created,
+        idempotent: result.idempotent,
+        instance,
+        credentials: {
+          token: result.token,
+          tokenReturnedOnce: Boolean(result.token),
+          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'This instance already has a token. Rotate it from the manager if a new secret is needed.'
+        }
+      })
+    } catch (error: any) {
+      return this.jsonError(response, 422, 'INVALID_INSTANCE_REGISTRATION', error.message)
+    }
+  }
+
+  public async integrationGetInstance({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    const instance = this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), true)
+    if (!instance) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
+
+    return response.json({ status: 'ok', success: true, instance })
+  }
+
+  public async integrationGetStatus({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    const instance = this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
+    if (!instance) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
+
+    return response.json({
+      status: 'ok',
+      success: true,
+      instance: {
+        clientId: instance.clientId,
+        integrationId: instance.integrationId,
+        status: instance.status,
+        statusLabel: instance.statusLabel,
+        qr: instance.qr,
+        session: instance.session,
+        health: instance.health
+      }
+    })
+  }
+
+  public async integrationGetQr({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    const qrState = this.botService.getQrState(params.clientId)
+    if (!qrState) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
+
+    return response.json({ status: 'ok', success: true, qr: qrState })
+  }
+
+  public async integrationQrStream({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    if (!this.botService.configs.has(params.clientId)) {
+      return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
+    }
+
+    const res = response.response
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    })
+
+    const writeState = () => {
+      res.write(`event: qr\ndata: ${JSON.stringify(this.botService.getQrState(params.clientId))}\n\n`)
+    }
+
+    writeState()
+    const interval = setInterval(writeState, 2000)
+
+    if (request.request && typeof request.request.on === 'function') {
+      request.request.on('close', () => clearInterval(interval))
+    }
+  }
+
+  public async integrationConfigureInstance({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    try {
+      const payload = request.all()
+      this.validateCommandFiles(payload.commandFiles)
+      await this.botService.updateIntegrationConfig(params.clientId, {
+        externalClientId: payload.externalClientId,
+        displayName: payload.displayName,
+        commandFiles: payload.commandFiles,
+        commandRules: payload.commandRules,
+        webhookUrl: payload.webhookUrl,
+        allowedOrigins: payload.allowedOrigins,
+        metadata: payload.metadata,
+      })
+
+      return response.json({
+        status: 'ok',
+        success: true,
+        instance: this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), true)
+      })
+    } catch (error: any) {
+      const statusCode = error.message && error.message.includes('does not exist') ? 404 : 422
+      return this.jsonError(response, statusCode, statusCode === 404 ? 'INSTANCE_NOT_FOUND' : 'INVALID_CONFIGURATION', error.message)
+    }
+  }
+
+  public async integrationReconnectInstance({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    try {
+      await this.botService.reconnectClient(params.clientId)
+      return response.status(202).json({
+        status: 'ok',
+        success: true,
+        message: 'Reconnect requested.',
+        instance: this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
+      })
+    } catch (error: any) {
+      return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', error.message)
+    }
+  }
+
+  public async integrationRotateToken({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    try {
+      const token = await this.botService.rotateIntegrationToken(params.clientId)
+      return response.json({
+        status: 'ok',
+        success: true,
+        credentials: {
+          token,
+          tokenReturnedOnce: true,
+          note: 'Store this bearer token now; only its hash is kept by the server.'
+        },
+        instance: this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
+      })
+    } catch (error: any) {
+      return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', error.message)
+    }
+  }
+
+  public async integrationSendMessage({ request, response, params }: HttpContextContract) {
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    const idempotencyKey = request.header('idempotency-key') || request.input('idempotencyKey')
+    if (idempotencyKey) {
+      const receipt = this.botService.getDeliveryReceipt(params.clientId, idempotencyKey)
+      if (receipt) {
+        response.header('Idempotent-Replay', 'true')
+        return response.status(receipt.statusCode).json({
+          ...receipt.response,
+          idempotency: {
+            replayed: true,
+            keyExpiresAt: receipt.expiresAt
+          }
+        })
+      }
+    }
+
+    const result = await this.dispatchMessages(request, params.clientId)
+    const body = {
+      ...result.body,
+      idempotency: idempotencyKey ? { replayed: false } : undefined
+    }
+
+    if (idempotencyKey && result.statusCode >= 200 && result.statusCode < 300) {
+      await this.botService.rememberDeliveryReceipt(params.clientId, idempotencyKey, result.statusCode, body)
+    }
+
+    return response.status(result.statusCode).json(body)
+  }
+
+  public async integrationPostStory(ctx: HttpContextContract) {
+    const { request, response, params } = ctx
+    const auth = this.authorizeIntegrationRequest(request, params.clientId)
+    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
+
+    return this.postStatus(ctx)
   }
 
   public async qr({ request, response }: HttpContextContract) {

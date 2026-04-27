@@ -11,13 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
     currentConfigClient: null,
     currentConfigCommand: null,
     clientChats: [],
-    calendarInstance: null
+    calendarInstance: null,
+    integrationBaseUrl: window.location.origin
   };
 
   try {
     const dataEl = document.getElementById('app-data');
     if (dataEl && dataEl.dataset.commands) state.globalFiles = JSON.parse(dataEl.dataset.commands);
     if (dataEl && dataEl.dataset.modules) state.modulesMetadata = JSON.parse(dataEl.dataset.modules);
+    if (dataEl && dataEl.dataset.integrationBaseUrl) state.integrationBaseUrl = dataEl.dataset.integrationBaseUrl;
   } catch (e) {}
 
   function showToast(message, type = 'success') {
@@ -140,6 +142,48 @@ document.addEventListener('DOMContentLoaded', () => {
       `).join('');
     } catch (e) {
       container.innerHTML = '<div class="text-center text-red-500 text-sm py-10 font-bold">Error al cargar registros.</div>';
+    }
+  }
+
+  async function reconnectInstance(clientId, btn) {
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = 'Reconectando...'; btn.disabled = true; }
+    try {
+      const res = await fetch(`/whatsapp-manager/integration/v1/instances/${encodeURIComponent(clientId)}/reconnect`, {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error?.message || data.error || 'No se pudo reconectar');
+      showToast('Reconexión solicitada');
+    } catch (err) {
+      showToast(err.message || 'Error al reconectar', 'error');
+    } finally {
+      if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+    }
+  }
+
+  async function rotateInstanceToken(clientId, btn) {
+    if (!confirm('El token anterior dejará de funcionar. ¿Emitir un token nuevo para esta instancia?')) return;
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = 'Rotando...'; btn.disabled = true; }
+    try {
+      const res = await fetch(`/whatsapp-manager/integration/v1/instances/${encodeURIComponent(clientId)}/token/rotate`, {
+        method: 'POST',
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error?.message || data.error || 'No se pudo rotar el token');
+      const output = document.getElementById(`token-output-${clientId}`);
+      if (output) {
+        output.classList.remove('hidden');
+        output.value = data.credentials.token;
+      }
+      showToast('Token nuevo emitido');
+    } catch (err) {
+      showToast(err.message || 'Error al rotar token', 'error');
+    } finally {
+      if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
     }
   }
 
@@ -661,6 +705,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (action === 'toggle-actions') {
         const panel = document.getElementById(`actions-${actionBtn.dataset.client}`);
         if (panel) panel.classList.toggle('hidden');
+      }
+      if (action === 'reconnect-instance') {
+        reconnectInstance(actionBtn.dataset.client, actionBtn);
+      }
+      if (action === 'rotate-token') {
+        rotateInstanceToken(actionBtn.dataset.client, actionBtn);
       }
       if (action === 'open-modal') {
         toggleModal('commands-modal', true);

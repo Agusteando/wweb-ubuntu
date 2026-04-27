@@ -15,7 +15,7 @@
   <!-- Bundled FullCalendar Core -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   
-  <script src="/whatsapp-manager/resources/js/bot.js?v=4.4.0" defer></script>
+  <script src="/whatsapp-manager/resources/js/bot.js?v=5.0.0" defer></script>
   
   <style>
     body { background-color: #f8fafc; }
@@ -47,7 +47,7 @@
 </head>
 <body class="text-slate-800 font-sans h-screen flex flex-col overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
 
-  <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}" data-modules="{{ modulesMetadataJson }}"></div>
+  <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}" data-modules="{{ modulesMetadataJson }}" data-integration-base-url="{{ integrationBaseUrl }}"></div>
   <div id="toast-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
 
   <nav class="bg-[#0f172a] shadow-md text-white shrink-0 relative z-10 border-b border-slate-800">
@@ -161,6 +161,7 @@
                 <div class="flex border-b border-indigo-200 mb-4">
                   <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-indigo-700 border-b-2 border-indigo-700" data-target="qa-msg-{{client.clientId}}">Mensaje Directo</button>
                   <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b-2 border-transparent hover:text-indigo-600" data-target="qa-status-{{client.clientId}}">Publicar Estado</button>
+                  <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b-2 border-transparent hover:text-indigo-600" data-target="qa-api-{{client.clientId}}">Integracion API</button>
                 </div>
 
                 <form class="send-message-form qa-tab-content block flex flex-col gap-3" id="qa-msg-{{client.clientId}}" data-client-id="{{ client.clientId }}">
@@ -205,6 +206,85 @@
                   
                   <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm flex justify-center items-center">Publicar Estado</button>
                 </form>
+
+                <div class="qa-tab-content hidden flex flex-col gap-4" id="qa-api-{{client.clientId}}">
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Estado</p>
+                      <p class="text-sm font-extrabold text-slate-800">{{ client.integration.statusLabel }}</p>
+                      <p class="text-[11px] text-slate-500 mt-1">QR: {{ client.integration.qr.available ? 'Disponible' : 'No disponible' }}</p>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Token</p>
+                      @if(client.integration.credentials.hasToken)
+                        <p class="text-sm font-mono font-extrabold text-slate-800">{{ client.integration.credentials.tokenPrefix }}...{{ client.integration.credentials.tokenLast4 }}</p>
+                      @else
+                        <p class="text-sm font-semibold text-slate-500">Sin token emitido</p>
+                      @endif
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" data-action="reconnect-instance" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl font-semibold text-xs transition-all shadow-sm">Reconectar</button>
+                    <button type="button" data-action="rotate-token" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-semibold text-xs transition-all shadow-sm">Rotar Token</button>
+                  </div>
+                  <textarea id="token-output-{{ client.clientId }}" readonly class="hidden w-full h-20 text-[11px] font-mono bg-slate-900 text-emerald-300 rounded-xl p-3 border border-slate-700"></textarea>
+
+                  <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Identificadores Estables</p>
+                    <div class="space-y-1 text-[11px] font-mono text-slate-600 break-all">
+                      <p>clientId={{ client.clientId }}</p>
+                      <p>integrationId={{ client.integration.integrationId }}</p>
+                    </div>
+                  </div>
+
+                  <div class="bg-slate-900 text-slate-100 rounded-xl p-3 shadow-inner overflow-x-auto">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Flujo de Integracion</p>
+                    <pre class="text-[10px] leading-relaxed font-mono whitespace-pre-wrap">1. POST {{ integrationBaseUrl }}/whatsapp-manager/integration/v1/instances
+   Authorization: Bearer $INTEGRATION_ADMIN_TOKEN
+   Idempotency-Key: stable-client-key
+
+2. Open QR status:
+   GET {{ client.integration.endpoints.qrStatus }}
+   Authorization: Bearer INSTANCE_TOKEN
+
+3. Or stream QR updates:
+   GET {{ client.integration.endpoints.qrStream }}
+
+4. Check session:
+   GET {{ client.integration.endpoints.status }}
+
+5. Send with retry safety:
+   POST {{ client.integration.endpoints.sendMessage }}
+   Authorization: Bearer INSTANCE_TOKEN
+   Idempotency-Key: message-uuid
+   {"chatId":["5215555555555@c.us"],"message":"Hello"}
+
+Errors use {"status":"error","error":{"code":"...","message":"..."}}.</pre>
+                  </div>
+
+                  <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Actividad Reciente</p>
+                    @if(!client.recentActivity || client.recentActivity.length === 0)
+                      <p class="text-xs text-slate-400 font-medium">Sin actividad externa registrada.</p>
+                    @else
+                      <div class="space-y-2">
+                        @each(log in client.recentActivity)
+                          <div class="border border-slate-100 rounded-lg p-2 bg-slate-50">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-[10px] font-bold uppercase {{ log.status === 'success' ? 'text-emerald-600' : (log.status === 'blocked' ? 'text-slate-500' : 'text-red-600') }}">{{ log.status }}</span>
+                              <span class="text-[10px] text-slate-400 font-mono">{{ new Date(log.timestamp).toLocaleString() }}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-700 font-semibold truncate mt-1">{{ log.payloadSummary }}</p>
+                            @if(log.error)
+                              <p class="text-[11px] text-red-600 mt-1">{{ log.error }}</p>
+                            @endif
+                          </div>
+                        @endeach
+                      </div>
+                    @endif
+                  </div>
+                </div>
               </div>
             </div>
           @endeach

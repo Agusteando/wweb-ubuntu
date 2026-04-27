@@ -3,7 +3,7 @@ import { CorsConfig } from '@ioc:Adonis/Core/Cors'
 const corsConfig: CorsConfig = {
   enabled: true,
   origin: true,
-  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   headers: true,
   exposeHeaders: [
     'cache-control',
@@ -12,6 +12,7 @@ const corsConfig: CorsConfig = {
     'expires',
     'last-modified',
     'pragma',
+    'idempotent-replay',
   ],
   credentials: true,
   maxAge: 90,
