@@ -7,11 +7,6 @@ import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
 
-type IntegrationAuthContext = {
-  scope: 'admin' | 'instance';
-  clientId?: string;
-}
-
 type DispatchResult = {
   statusCode: number;
   body: any;
@@ -48,53 +43,6 @@ export default class BotController {
         details
       }
     })
-  }
-
-  private parseBearerToken(request: HttpContextContract['request']): string | null {
-    const authHeader = request.header('authorization')
-    if (!authHeader) return null
-
-    const [scheme, ...tokenParts] = authHeader.split(' ')
-    if (scheme.toLowerCase() !== 'bearer') return null
-
-    return tokenParts.join(' ').trim() || null
-  }
-
-  private isValidBasicAuth(request: HttpContextContract['request']): boolean {
-    const authHeader = request.header('authorization')
-    if (!authHeader || !authHeader.toLowerCase().startsWith('basic ')) return false
-
-    try {
-      const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii')
-      const separatorIndex = credentials.indexOf(':')
-      if (separatorIndex === -1) return false
-
-      const username = credentials.slice(0, separatorIndex)
-      const password = credentials.slice(separatorIndex + 1)
-
-      return username === Env.get('ADMIN_USERNAME') && password === Env.get('ADMIN_PASSWORD')
-    } catch (error) {
-      return false
-    }
-  }
-
-  private authorizeIntegrationRequest(request: HttpContextContract['request'], clientId?: string, adminOnly = false): IntegrationAuthContext | null {
-    if (this.isValidBasicAuth(request)) {
-      return { scope: 'admin' }
-    }
-
-    const token = this.parseBearerToken(request)
-    if (!token) return null
-
-    if (this.botService.verifyAdminIntegrationToken(token)) {
-      return { scope: 'admin' }
-    }
-
-    if (!adminOnly && clientId && this.botService.verifyIntegrationToken(clientId, token)) {
-      return { scope: 'instance', clientId }
-    }
-
-    return null
   }
 
   private validateClientId(clientId: string) {
@@ -803,9 +751,6 @@ export default class BotController {
   }
 
   public async integrationListInstances({ request, response }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, undefined, true)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid admin bearer token or manager Basic Auth credentials are required.')
-
     return response.json({
       status: 'ok',
       success: true,
@@ -814,9 +759,6 @@ export default class BotController {
   }
 
   public async integrationRegisterInstance({ request, response }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, undefined, true)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid admin bearer token or manager Basic Auth credentials are required.')
-
     try {
       const payload = request.all()
       const clientId = payload.clientId ? String(payload.clientId).trim() : undefined
@@ -833,7 +775,8 @@ export default class BotController {
         webhookUrl: payload.webhookUrl,
         allowedOrigins: payload.allowedOrigins,
         metadata: payload.metadata,
-        idempotencyKey
+        idempotencyKey,
+        issueToken: payload.issueToken === true || payload.issueToken === 'true'
       })
       const instance = this.botService.getIntegrationDetails(result.clientId, this.getIntegrationBaseUrl(request), true)
 
@@ -846,7 +789,7 @@ export default class BotController {
         credentials: {
           token: result.token,
           tokenReturnedOnce: Boolean(result.token),
-          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'This instance already has a token. Rotate it from the manager if a new secret is needed.'
+          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'No token was issued. Integration instances are tokenless by default.'
         }
       })
     } catch (error: any) {
@@ -855,9 +798,6 @@ export default class BotController {
   }
 
   public async integrationGetInstance({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     const instance = this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), true)
     if (!instance) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
 
@@ -865,9 +805,6 @@ export default class BotController {
   }
 
   public async integrationGetStatus({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     const instance = this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
     if (!instance) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
 
@@ -886,10 +823,7 @@ export default class BotController {
     })
   }
 
-  public async integrationGetQr({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
+  public async integrationGetQr({ response, params }: HttpContextContract) {
     const qrState = this.botService.getQrState(params.clientId)
     if (!qrState) return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
 
@@ -897,9 +831,6 @@ export default class BotController {
   }
 
   public async integrationQrStream({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     if (!this.botService.configs.has(params.clientId)) {
       return this.jsonError(response, 404, 'INSTANCE_NOT_FOUND', `Instance '${params.clientId}' does not exist.`)
     }
@@ -924,9 +855,6 @@ export default class BotController {
   }
 
   public async integrationConfigureInstance({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     try {
       const payload = request.all()
       this.validateCommandFiles(payload.commandFiles)
@@ -952,9 +880,6 @@ export default class BotController {
   }
 
   public async integrationReconnectInstance({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     try {
       await this.botService.reconnectClient(params.clientId)
       return response.status(202).json({
@@ -969,9 +894,6 @@ export default class BotController {
   }
 
   public async integrationRotateToken({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     try {
       const token = await this.botService.rotateIntegrationToken(params.clientId)
       return response.json({
@@ -990,9 +912,6 @@ export default class BotController {
   }
 
   public async integrationSendMessage({ request, response, params }: HttpContextContract) {
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     const idempotencyKey = request.header('idempotency-key') || request.input('idempotencyKey')
     if (idempotencyKey) {
       const receipt = this.botService.getDeliveryReceipt(params.clientId, idempotencyKey)
@@ -1022,10 +941,6 @@ export default class BotController {
   }
 
   public async integrationPostStory(ctx: HttpContextContract) {
-    const { request, response, params } = ctx
-    const auth = this.authorizeIntegrationRequest(request, params.clientId)
-    if (!auth) return this.jsonError(response, 401, 'UNAUTHORIZED', 'A valid bearer token is required for this instance.')
-
     return this.postStatus(ctx)
   }
 

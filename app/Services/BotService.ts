@@ -532,6 +532,7 @@ export default class BotService {
     allowedOrigins?: string[];
     metadata?: Record<string, any>;
     idempotencyKey?: string;
+    issueToken?: boolean;
   }): Promise<{ clientId: string, created: boolean, idempotent: boolean, token: string | null }> {
     const idempotencyKeyHash = input.idempotencyKey ? this.secretHash(input.idempotencyKey) : undefined
     let existingClientId: string | null = null
@@ -583,7 +584,7 @@ export default class BotService {
     integration.updatedAt = Date.now()
     integration.lastConfiguredAt = Date.now()
 
-    if (!integration.tokenHash) {
+    if (input.issueToken && !integration.tokenHash) {
       token = this.issueIntegrationToken(config)
     }
 

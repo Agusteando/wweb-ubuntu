@@ -215,18 +215,18 @@
                       <p class="text-[11px] text-slate-500 mt-1">QR: {{ client.integration.qr.available ? 'Disponible' : 'No disponible' }}</p>
                     </div>
                     <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Token</p>
+                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Token Opcional</p>
                       @if(client.integration.credentials.hasToken)
                         <p class="text-sm font-mono font-extrabold text-slate-800">{{ client.integration.credentials.tokenPrefix }}...{{ client.integration.credentials.tokenLast4 }}</p>
                       @else
-                        <p class="text-sm font-semibold text-slate-500">Sin token emitido</p>
+                        <p class="text-sm font-semibold text-slate-500">Tokenless por defecto</p>
                       @endif
                     </div>
                   </div>
 
                   <div class="grid grid-cols-2 gap-2">
                     <button type="button" data-action="reconnect-instance" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl font-semibold text-xs transition-all shadow-sm">Reconectar</button>
-                    <button type="button" data-action="rotate-token" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-semibold text-xs transition-all shadow-sm">Rotar Token</button>
+                    <button type="button" data-action="rotate-token" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-semibold text-xs transition-all shadow-sm">Generar Token</button>
                   </div>
                   <textarea id="token-output-{{ client.clientId }}" readonly class="hidden w-full h-20 text-[11px] font-mono bg-slate-900 text-emerald-300 rounded-xl p-3 border border-slate-700"></textarea>
 
@@ -241,12 +241,11 @@
                   <div class="bg-slate-900 text-slate-100 rounded-xl p-3 shadow-inner overflow-x-auto">
                     <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Flujo de Integracion</p>
                     <pre class="text-[10px] leading-relaxed font-mono whitespace-pre-wrap">1. POST {{ integrationBaseUrl }}/whatsapp-manager/integration/v1/instances
-   Authorization: Bearer $INTEGRATION_ADMIN_TOKEN
    Idempotency-Key: stable-client-key
+   {"clientId":"ventas","displayName":"Ventas"}
 
 2. Open QR status:
    GET {{ client.integration.endpoints.qrStatus }}
-   Authorization: Bearer INSTANCE_TOKEN
 
 3. Or stream QR updates:
    GET {{ client.integration.endpoints.qrStream }}
@@ -256,10 +255,10 @@
 
 5. Send with retry safety:
    POST {{ client.integration.endpoints.sendMessage }}
-   Authorization: Bearer INSTANCE_TOKEN
    Idempotency-Key: message-uuid
    {"chatId":["5215555555555@c.us"],"message":"Hello"}
 
+Tokens are optional. Create, QR, status, reconnect, configure, and send all work tokenless by default.
 Errors use {"status":"error","error":{"code":"...","message":"..."}}.</pre>
                   </div>
 

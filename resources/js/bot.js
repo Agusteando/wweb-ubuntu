@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function rotateInstanceToken(clientId, btn) {
-    if (!confirm('El token anterior dejará de funcionar. ¿Emitir un token nuevo para esta instancia?')) return;
+    if (!confirm('Emitir un token opcional para esta instancia? Si ya existe uno, el anterior dejará de funcionar.')) return;
     const originalText = btn ? btn.innerHTML : '';
     if (btn) { btn.innerHTML = 'Rotando...'; btn.disabled = true; }
     try {
@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         output.classList.remove('hidden');
         output.value = data.credentials.token;
       }
-      showToast('Token nuevo emitido');
+      showToast('Token opcional emitido');
     } catch (err) {
       showToast(err.message || 'Error al rotar token', 'error');
     } finally {

@@ -40,8 +40,8 @@ Route.group(() => {
 
 }).middleware('auth') // Applying Native Browser Protection
 
-// Versioned external integration API. Each handler performs bearer/admin auth
-// so third-party systems can connect without browser Basic Auth.
+// Versioned external integration API. These endpoints are intentionally public
+// so external systems can create, connect, inspect, and use instances tokenless.
 Route.group(() => {
   Route.get('/instances', 'BotController.integrationListInstances')
   Route.post('/instances', 'BotController.integrationRegisterInstance')
