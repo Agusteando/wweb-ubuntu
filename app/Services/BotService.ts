@@ -267,6 +267,7 @@ export default class BotService {
     const destructionPromises: Promise<void>[] = []
     
     for (const [clientId, client] of this.clients.entries()) {
+      await CommandRegistry.stopAutomations(clientId)
       const destroyPromise = new Promise<void>(async (resolve) => {
         try {
           await client.destroy()
@@ -360,7 +361,7 @@ export default class BotService {
       this.statusDetails.set(clientId, { updatedAt: Date.now(), reason: 'qr_received' })
     })
     
-    client.on('ready', () => { 
+    client.on('ready', async () => { 
       this.qrCodes.set(clientId, null)
       this.statuses.set(clientId, 'ready')
       this.statusDetails.set(clientId, { updatedAt: Date.now(), reason: 'ready' })
@@ -369,6 +370,9 @@ export default class BotService {
         health.failedProbes = 0
         health.isRecovering = false
       }
+
+      const config = this.configs.get(clientId)
+      await CommandRegistry.reconcileAutomations(clientId, client, config?.commandFiles || [])
       console.log(`[${clientId}] Client is healthy and ready.`)
     })
     
@@ -382,6 +386,7 @@ export default class BotService {
     
     client.on('disconnected', async (reason) => { 
       console.log(`[${clientId}] Client disconnected. Reason: ${reason}`)
+      await CommandRegistry.stopAutomations(clientId)
       this.statusDetails.set(clientId, { updatedAt: Date.now(), reason: `disconnected: ${reason}` })
       if (!this.isShuttingDown) {
         this.recoverClient(clientId, `Disconnected (${reason})`)
@@ -421,6 +426,11 @@ export default class BotService {
       config.commandFiles = commandFiles || []
       this.ensureIntegrationConfig(config).updatedAt = Date.now()
       await this.saveRegistry()
+
+      const client = this.clients.get(clientId)
+      if (client && this.statuses.get(clientId) === 'ready') {
+        await CommandRegistry.reconcileAutomations(clientId, client, config.commandFiles)
+      }
     }
   }
 

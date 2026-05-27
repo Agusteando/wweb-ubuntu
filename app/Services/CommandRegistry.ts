@@ -9,6 +9,7 @@ import * as ts from 'typescript'
 
 export default class CommandRegistry {
   public static handlers: Map<string, any> = new Map()
+  private static automationInstances: Map<string, any> = new Map()
 
   private static get isProduction() {
     return Env.get('NODE_ENV') === 'production'
@@ -28,6 +29,19 @@ export default class CommandRegistry {
     // In production, Application.appRoot points to the build directory.
     // In dev, it points to the repo root.
     return path.join(Application.appRoot, 'app', 'Whatsapp', 'Commands')
+  }
+
+  private static toLogicalName(commandFile: string): string {
+    return commandFile.endsWith('.js') ? commandFile.replace(/\.js$/, '.ts') : commandFile
+  }
+
+  private static instantiateHandler(handlerClass: any, client?: Client) {
+    if (typeof handlerClass === 'function' && handlerClass.prototype) return new handlerClass(client)
+    return handlerClass
+  }
+
+  private static automationKey(clientId: string, logicalName: string): string {
+    return `${clientId}:${logicalName}`
   }
 
   public static async loadCommands() {
@@ -86,9 +100,7 @@ export default class CommandRegistry {
       let type = 'Module'
       
       try {
-        const instance = (typeof handlerClass === 'function' && handlerClass.prototype) 
-          ? new handlerClass(null) 
-          : handlerClass;
+        const instance = this.instantiateHandler(handlerClass)
 
         if (handlerClass.instructions) instructions = handlerClass.instructions
         else if (instance && instance.instructions) instructions = instance.instructions
@@ -103,7 +115,7 @@ export default class CommandRegistry {
 
   public static async getFileContent(filename: string): Promise<string> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const logicalName = safePath.endsWith('.js') ? safePath.replace(/\.js$/, '.ts') : safePath
+    const logicalName = this.toLogicalName(safePath)
     const fullPath = path.join(this.sourceCommandsDir, logicalName)
     if (!existsSync(fullPath)) throw new Error('File not found')
     return await fs.readFile(fullPath, 'utf-8')
@@ -111,7 +123,7 @@ export default class CommandRegistry {
 
   public static async saveFileContent(filename: string, content: string): Promise<void> {
     const safePath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '')
-    const logicalName = safePath.endsWith('.js') ? safePath.replace(/\.js$/, '.ts') : safePath
+    const logicalName = this.toLogicalName(safePath)
     const sourcePath = path.join(this.sourceCommandsDir, logicalName)
 
     if (!existsSync(this.sourceCommandsDir)) {
@@ -145,6 +157,64 @@ export default class CommandRegistry {
     await this.loadCommands()
   }
 
+  public static async reconcileAutomations(clientId: string, client: Client, commandFiles: string[] = []) {
+    const desiredKeys = new Set<string>()
+
+    for (const commandFile of commandFiles || []) {
+      const logicalName = this.toLogicalName(commandFile)
+      const handlerClass = this.handlers.get(logicalName)
+      if (!handlerClass) continue
+
+      let instance: any
+      try {
+        instance = this.instantiateHandler(handlerClass, client)
+      } catch (err) {
+        console.error(`Error initializing automation ${logicalName}:`, err)
+        continue
+      }
+
+      if (!instance || typeof instance.start !== 'function') continue
+
+      const key = this.automationKey(clientId, logicalName)
+      desiredKeys.add(key)
+
+      if (this.automationInstances.has(key)) continue
+
+      try {
+        await instance.start(client, clientId)
+        this.automationInstances.set(key, instance)
+      } catch (err) {
+        console.error(`Error starting automation ${logicalName}:`, err)
+      }
+    }
+
+    for (const [key, instance] of Array.from(this.automationInstances.entries())) {
+      if (!key.startsWith(`${clientId}:`) || desiredKeys.has(key)) continue
+
+      try {
+        if (typeof instance.stop === 'function') await instance.stop()
+      } catch (err) {
+        console.error(`Error stopping automation ${key}:`, err)
+      } finally {
+        this.automationInstances.delete(key)
+      }
+    }
+  }
+
+  public static async stopAutomations(clientId: string) {
+    for (const [key, instance] of Array.from(this.automationInstances.entries())) {
+      if (!key.startsWith(`${clientId}:`)) continue
+
+      try {
+        if (typeof instance.stop === 'function') await instance.stop()
+      } catch (err) {
+        console.error(`Error stopping automation ${key}:`, err)
+      } finally {
+        this.automationInstances.delete(key)
+      }
+    }
+  }
+
   public static async execute(commandFiles: string[], message: Message, client: Client, rules: Record<string, { include: string[], exclude: string[] }> = {}) {
     // SECURITY PATCH: Prevent automated systems from interpreting, transcribing, or replying to Statuses (Stories)
     if (message.isStatus || message.from === 'status@broadcast' || message.to === 'status@broadcast') {
@@ -157,7 +227,7 @@ export default class CommandRegistry {
     if (!commandFiles || commandFiles.length === 0) return
 
     for (const commandFile of commandFiles) {
-      const logicalName = commandFile.endsWith('.js') ? commandFile.replace(/\.js$/, '.ts') : commandFile;
+      const logicalName = this.toLogicalName(commandFile)
       const handlerClass = this.handlers.get(logicalName)
       
       if (handlerClass) {

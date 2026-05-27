@@ -37,4 +37,12 @@ export default Env.rules({
   DB_USER: Env.schema.string.optional(),
   DB_PASSWORD: Env.schema.string.optional(),
   DB_DATABASE: Env.schema.string.optional(),
+
+  // Attendance and SSN automation settings
+  ATTENDANCE_REPORT_ENDPOINT: Env.schema.string.optional(),
+  SSN_RSS_URL: Env.schema.string.optional(),
+  SSN_CHECK_INTERVAL_MS: Env.schema.string.optional(),
+  SSN_MAJOR_MAGNITUDE_THRESHOLD: Env.schema.string.optional(),
+  SSN_MAJOR_ALERT_CHAT_IDS: Env.schema.string.optional(),
+  SSN_MINOR_ALERT_CHAT_IDS: Env.schema.string.optional(),
 })
