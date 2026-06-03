@@ -1,1 +1,1 @@
-Fix asistencia list reporting and add SSN earthquake alerts
+Agrega eliminación de mensajes de WhatsApp a la API

@@ -62,6 +62,17 @@ export default class BotController {
     }
   }
 
+  private parseBoolean(value: any, defaultValue: boolean): boolean {
+    if (value === undefined || value === null || value === '') return defaultValue
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (['true', '1', 'yes', 'on'].includes(normalized)) return true
+      if (['false', '0', 'no', 'off'].includes(normalized)) return false
+    }
+    return Boolean(value)
+  }
+
   public async index({ view, request }: HttpContextContract) {
     const integrationBaseUrl = this.getIntegrationBaseUrl(request)
     const clientsData = Array.from(this.botService.statuses.entries()).map(([clientId, status]) => {
@@ -744,6 +755,79 @@ export default class BotController {
         status: 'error',
         target: 'Edit Request',
         payloadSummary: 'Edit Failed',
+        error: error.message
+      });
+      return response.status(500).json({ status: 'error', success: false, error: error.message });
+    }
+  }
+
+  public async deleteMessage({ request, response, params }: HttpContextContract) {
+    let clientId = params.clientId;
+    let client;
+
+    if (!this.botService.apiStatus) {
+      this.botService.logApi({
+        clientId: clientId || 'any',
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'blocked',
+        target: 'Delete Request',
+        payloadSummary: `Message Delete Blocked.`,
+        error: 'API is globally disabled.'
+      });
+      return response.status(403).json({ status: 'error', error: 'API message sending is disabled.' });
+    }
+
+    if (!clientId || clientId.toLowerCase() === 'any') {
+      const readyClient = this.botService.getAnyReadyClient();
+      if (!readyClient) return response.status(400).json({ status: 'error', error: 'No clients connected' });
+      client = readyClient.client;
+      clientId = readyClient.id;
+    } else {
+      client = this.botService.clients.get(clientId);
+      if (!client || this.botService.statuses.get(clientId) !== 'ready') {
+        return response.status(400).json({ status: 'error', error: `Client not ready.` });
+      }
+    }
+
+    const { messageId, everyone, clearMedia } = request.only(['messageId', 'everyone', 'clearMedia']);
+
+    if (!messageId || typeof messageId !== 'string') return response.badRequest({ status: 'error', error: 'messageId is required' });
+
+    const shouldDeleteForEveryone = this.parseBoolean(everyone, true);
+    const shouldClearMedia = this.parseBoolean(clearMedia, true);
+
+    try {
+      const msg = await client.getMessageById(messageId);
+      if (!msg) return response.status(404).json({ status: 'error', error: 'Message not found' });
+
+      const chatId = msg.fromMe ? msg.to : msg.from;
+      await msg.delete(shouldDeleteForEveryone, shouldClearMedia);
+
+      this.botService.logApi({
+        clientId,
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'success',
+        target: chatId || 'Delete Request',
+        payloadSummary: `Deleted: ${messageId}`
+      });
+
+      return response.json({
+        status: 'ok',
+        success: true,
+        clientUsed: clientId,
+        deleted: true,
+        message: { id: messageId, chatId, everyone: shouldDeleteForEveryone, clearMedia: shouldClearMedia },
+      });
+    } catch (error: any) {
+      this.botService.logApi({
+        clientId,
+        endpoint: request.url(),
+        method: request.method(),
+        status: 'error',
+        target: 'Delete Request',
+        payloadSummary: 'Delete Failed',
         error: error.message
       });
       return response.status(500).json({ status: 'error', success: false, error: error.message });

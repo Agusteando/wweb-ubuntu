@@ -62,17 +62,22 @@ Route.group(() => {
 
 Route.post('/whatsapp-manager/api/send', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/edit', 'BotController.editMessage')
+Route.post('/whatsapp-manager/api/delete', 'BotController.deleteMessage')
 
 Route.post('/whatsapp-manager/bot/send/any', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/any', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/bot/edit/any', 'BotController.editMessage')
 Route.post('/whatsapp-manager/api/edit/any', 'BotController.editMessage')
+Route.post('/whatsapp-manager/bot/delete/any', 'BotController.deleteMessage')
+Route.post('/whatsapp-manager/api/delete/any', 'BotController.deleteMessage')
 
 Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessages')
 
 Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessage')
 Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
+Route.post('/whatsapp-manager/bot/delete/:clientId', 'BotController.deleteMessage')
+Route.post('/whatsapp-manager/api/delete/:clientId', 'BotController.deleteMessage')
 
 Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media', 'BotController.sendMessages')
