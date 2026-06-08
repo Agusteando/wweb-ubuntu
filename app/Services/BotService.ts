@@ -157,17 +157,27 @@ export default class BotService {
       this.dataDir,
       this.authDir,
       this.registryFile,
-      this.envNumber('WA_SESSION_BACKUP_RETENTION', 10, 3, 50)
+      {
+        retention: this.envNumber('WA_SESSION_BACKUP_RETENTION', 2, 0, 20),
+        maxBackupBytes: this.envNumber('WA_SESSION_BACKUP_MAX_MB', 512, 0, 10240) * 1024 * 1024,
+        maxBackupAgeMs: this.envNumber('WA_SESSION_BACKUP_MAX_AGE_DAYS', 7, 0, 365) * 24 * 60 * 60 * 1000,
+      }
     )
   }
 
   private envNumber(name: string, fallback: number, min?: number, max?: number): number {
     const raw = Env.get(name as any)
     const parsed = typeof raw === 'number' ? raw : Number(raw)
-    let value = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+    const allowsZero = typeof min === 'number' && min <= 0
+    let value = Number.isFinite(parsed) && (parsed > 0 || (allowsZero && parsed === 0)) ? parsed : fallback
     if (typeof min === 'number') value = Math.max(min, value)
     if (typeof max === 'number') value = Math.min(max, value)
     return value
+  }
+
+  private envString(name: string, fallback: string): string {
+    const raw = Env.get(name as any)
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : fallback
   }
 
   private setRuntimeState(clientId: string, state: SessionRuntimeState, reason?: string) {
@@ -338,9 +348,12 @@ export default class BotService {
       console.error(`[${clientId}] Error stopping automations before destroy:`, error)
     })
 
-    await this.vault.snapshotClientSession(clientId, `pre-${reason}`).catch((error) => {
-      console.warn(`[${clientId}] Pre-destroy session snapshot skipped/failed:`, error?.message || error)
-    })
+    const snapshotBeforeDestroy = ['recovery', 'scheduled-recycle', 'manual-reconnect'].some((token) => reason.includes(token))
+    if (snapshotBeforeDestroy) {
+      await this.vault.snapshotClientSession(clientId, `pre-${reason}`, { minIntervalMs: this.envNumber('WA_SESSION_SNAPSHOT_MIN_INTERVAL_MS', 6 * 60 * 60 * 1000, 0, 7 * 24 * 60 * 60 * 1000) }).catch((error) => {
+        console.warn(`[${clientId}] Pre-destroy session snapshot skipped/failed:`, error?.message || error)
+      })
+    }
 
     const browserProcess = (client as any)?.pupBrowser?.process?.()
     const browserPid = browserProcess?.pid
@@ -359,9 +372,6 @@ export default class BotService {
       await this.killBrowserProcess(clientId, browserPid)
     }
 
-    await this.vault.snapshotClientSession(clientId, `post-${reason}`).catch((error) => {
-      console.warn(`[${clientId}] Post-destroy session snapshot skipped/failed:`, error?.message || error)
-    })
   }
 
   private async killBrowserProcess(clientId: string, pid: number): Promise<void> {
@@ -640,7 +650,7 @@ export default class BotService {
       readyHealth.lastGoodStateAt = Date.now()
       readyHealth.lastKnownState = 'CONNECTED'
 
-      await this.vault.snapshotClientSession(clientId, 'ready').catch((error) => {
+      await this.vault.snapshotClientSession(clientId, 'ready', { minIntervalMs: this.envNumber('WA_SESSION_SNAPSHOT_MIN_INTERVAL_MS', 6 * 60 * 60 * 1000, 0, 7 * 24 * 60 * 60 * 1000) }).catch((error) => {
         console.warn(`[${clientId}] Ready-state session snapshot skipped/failed:`, error?.message || error)
       })
 
@@ -1043,10 +1053,17 @@ export default class BotService {
     this.healthData.delete(clientId)
     await this.saveRegistry()
     
+    const removePolicy = this.envString('WA_REMOVE_CLIENT_SESSION_POLICY', 'delete').toLowerCase()
     try {
-      await this.vault.quarantineClientSession(clientId, 'removed-from-manager')
+      if (removePolicy === 'keep') {
+        console.warn(`[${clientId}] Removed from registry but LocalAuth session was kept because WA_REMOVE_CLIENT_SESSION_POLICY=keep.`)
+      } else if (removePolicy === 'quarantine') {
+        await this.vault.quarantineClientSession(clientId, 'removed-from-manager')
+      } else {
+        await this.vault.deleteClientSession(clientId)
+      }
     } catch (e: any) {
-      console.error(`[${clientId}] Failed to quarantine removed LocalAuth session:`, e?.message || e)
+      console.error(`[${clientId}] Failed to apply LocalAuth removal policy '${removePolicy}':`, e?.message || e)
     }
   }
 
@@ -1153,7 +1170,7 @@ export default class BotService {
 
     const client = this.clients.get(clientId)
     if (client) {
-      await this.destroyClientInstance(clientId, client, 'recovery')
+      await this.destroyClientInstance(clientId, client, `recovery-${reason}`)
     }
     
     this.clients.delete(clientId)

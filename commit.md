@@ -1,1 +1,1 @@
-Fortalece persistencia y recuperación segura de sesiones WhatsApp en Ubuntu/PM2
+Fortalece la preservación de sesiones de WhatsApp sin saturar el almacenamiento del servidor

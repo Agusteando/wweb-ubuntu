@@ -30,6 +30,10 @@ export default Env.rules({
 
   // WhatsApp runtime durability tuning. Defaults are handled in BotService when unset.
   WA_SESSION_BACKUP_RETENTION: Env.schema.string.optional(),
+  WA_SESSION_BACKUP_MAX_MB: Env.schema.string.optional(),
+  WA_SESSION_BACKUP_MAX_AGE_DAYS: Env.schema.string.optional(),
+  WA_SESSION_SNAPSHOT_MIN_INTERVAL_MS: Env.schema.string.optional(),
+  WA_REMOVE_CLIENT_SESSION_POLICY: Env.schema.string.optional(),
   WA_HEALTH_INTERVAL_MS: Env.schema.string.optional(),
   WA_READY_TIMEOUT_MS: Env.schema.string.optional(),
   WA_PROBE_TIMEOUT_MS: Env.schema.string.optional(),
