@@ -1,23 +1,36 @@
 module.exports = {
   apps: [
     {
-      name: 'whatsapp-bot',
+      name: 'wweb-ubuntu',
       script: './build/server.js',
       cwd: './',
       instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       watch: false,
+      time: true,
       max_memory_restart: '1G',
+      restart_delay: 5000,
+      exp_backoff_restart_delay: 100,
+      kill_timeout: 15000,
+      listen_timeout: 15000,
+      out_file: './logs/pm2-out.log',
+      error_file: './logs/pm2-error.log',
+      merge_logs: true,
       env: {
         NODE_ENV: 'production',
         PORT: 3333,
-        HOST: '0.0.0.0'
+        HOST: '0.0.0.0',
+        WA_SCHEDULED_RECYCLE_HOURS: 12,
+        WA_SESSION_BACKUP_RETENTION: 10,
       },
       env_production: {
         NODE_ENV: 'production',
         PORT: 3333,
-        HOST: '0.0.0.0'
+        HOST: '0.0.0.0',
+        WA_SCHEDULED_RECYCLE_HOURS: 12,
+        WA_SESSION_BACKUP_RETENTION: 10,
       },
     },
   ],
-};
+}

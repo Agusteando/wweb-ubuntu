@@ -1,1 +1,1 @@
-Agrega eliminación de mensajes de WhatsApp a la API
+Fortalece persistencia y recuperación segura de sesiones WhatsApp en Ubuntu/PM2

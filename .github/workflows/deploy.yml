@@ -14,4 +14,12 @@ jobs:
         run: cd ~/wweb-ubuntu && pwd
 
       - name: Deploy
-        run: cd ~/wweb-ubuntu && git fetch origin && git reset --hard origin/main && npm install && npm run build && pm2 restart wweb-ubuntu --update-env
+        run: |
+          cd ~/wweb-ubuntu
+          git fetch origin
+          git reset --hard origin/main
+          npm install
+          npm run build
+          mkdir -p logs
+          pm2 startOrReload ecosystem.config.js --env production --update-env
+          pm2 save

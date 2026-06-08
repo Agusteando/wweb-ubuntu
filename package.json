@@ -8,7 +8,10 @@
     "start": "node build/server.js",
     "lint": "eslint . --ext=.ts",
     "format": "prettier --write .",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "pm2:start": "mkdir -p logs && pm2 startOrReload ecosystem.config.js --env production --update-env",
+    "pm2:restart": "mkdir -p logs && pm2 restart wweb-ubuntu --update-env",
+    "pm2:logs": "pm2 logs wweb-ubuntu"
   },
   "devDependencies": {
     "@adonisjs/assembler": "^5.9.5",

@@ -28,6 +28,18 @@ export default Env.rules({
   INTEGRATION_ADMIN_TOKEN: Env.schema.string.optional(),
   INTEGRATION_PUBLIC_BASE_URL: Env.schema.string.optional(),
 
+  // WhatsApp runtime durability tuning. Defaults are handled in BotService when unset.
+  WA_SESSION_BACKUP_RETENTION: Env.schema.string.optional(),
+  WA_HEALTH_INTERVAL_MS: Env.schema.string.optional(),
+  WA_READY_TIMEOUT_MS: Env.schema.string.optional(),
+  WA_PROBE_TIMEOUT_MS: Env.schema.string.optional(),
+  WA_RECOVERY_FAILURE_THRESHOLD: Env.schema.string.optional(),
+  WA_RECOVERY_DELAY_MS: Env.schema.string.optional(),
+  WA_RECOVERY_BACKOFF_MS: Env.schema.string.optional(),
+  WA_DESTROY_TIMEOUT_MS: Env.schema.string.optional(),
+  WA_SHUTDOWN_TIMEOUT_MS: Env.schema.string.optional(),
+  WA_SCHEDULED_RECYCLE_HOURS: Env.schema.string.optional(),
+
   // Buena Infancia Scraping Credentials
   BUENAINFANCIA_USERNAME: Env.schema.string.optional(),
   BUENAINFANCIA_PASSWORD: Env.schema.string.optional(),

@@ -80,7 +80,7 @@ export default class BotController {
       const integrationDetails = this.botService.getIntegrationDetails(clientId, integrationBaseUrl, true)
       return {
         clientId,
-        status: this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR')),
+        status: integrationDetails?.statusLabel || (this.botService.qrCodes.get(clientId) ? 'QR Received' : (status === 'ready' ? 'Connected' : (status === 'error' ? 'Error' : 'Awaiting QR'))),
         commandFiles: config?.commandFiles || [],
         commandRules: config?.commandRules || {},
         integration: integrationDetails,
@@ -1040,6 +1040,7 @@ export default class BotController {
       res.write(`data: ${JSON.stringify({
         qr: Object.fromEntries(this.botService.qrCodes),
         status: Object.fromEntries(this.botService.statuses),
+        runtimeState: Object.fromEntries(this.botService.runtimeStates),
       })}\n\n`)
     }, 2000)
 
