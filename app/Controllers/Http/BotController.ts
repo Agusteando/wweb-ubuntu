@@ -6,6 +6,7 @@ import CommandRegistry from 'App/Services/CommandRegistry'
 import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
+import { requireSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
 
 type DispatchResult = {
   statusCode: number;
@@ -508,17 +509,23 @@ export default class BotController {
       if (options && typeof options === 'object') Object.assign(args, options)
 
       const sentMessages: any[] = []
+      const failedMessages: Array<{ chatId: string; error: string }> = []
       for (let i = 0; i < chatId.length; i++) {
         const currentChatId = chatId[i]
         try {
           const result = await client.sendMessage(currentChatId, message, args)
-          sentMessages.push({ chatId: currentChatId, id: result.id?._serialized ?? result.id, timestamp: result.timestamp })
-        } catch (sendMessageError) {
+          const metadata = requireSentMessageMetadata(result, currentChatId)
+          sentMessages.push({ chatId: currentChatId, id: metadata.id, timestamp: metadata.timestamp })
+        } catch (sendMessageError: any) {
+          const errorMessage = sendMessageError?.message || String(sendMessageError)
+          failedMessages.push({ chatId: currentChatId, error: errorMessage })
           console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError)
         }
       }
 
-      const success = sentMessages.length > 0
+      const deliveredAny = sentMessages.length > 0
+      const success = deliveredAny && failedMessages.length === 0
+      const status = success ? 'ok' : deliveredAny ? 'partial' : 'error'
       let summaryText = ''
       if (typeof message === 'string') summaryText = message.substring(0, 100)
       else if (caption) summaryText = caption.substring(0, 100)
@@ -532,12 +539,21 @@ export default class BotController {
         status: success ? 'success' : 'error',
         target: chatId.join(', '),
         payloadSummary: summaryText,
-        error: success ? undefined : 'Failed to dispatch to one or more targets.'
+        error: success ? undefined : failedMessages.map((failure) => `${failure.chatId}: ${failure.error}`).join('; ')
       })
 
       return {
-        statusCode: success ? 200 : 500,
-        body: { status: success ? 'ok' : 'error', success, clientUsed: clientId, messages: sentMessages, error: success ? undefined : 'Failed to dispatch to one or more targets.' }
+        statusCode: deliveredAny ? 200 : 502,
+        body: {
+          status,
+          success,
+          clientUsed: clientId,
+          messages: sentMessages,
+          failures: failedMessages,
+          error: success ? undefined : deliveredAny
+            ? 'The message was delivered to only some targets.'
+            : 'WhatsApp did not confirm delivery to any target.'
+        }
       }
     } catch (error: any) {
       this.botService.logApi({
@@ -606,7 +622,7 @@ export default class BotController {
         }
         
         const result = await client.sendMessage('status@broadcast', statusText, args);
-        const messageId = result.id?._serialized ?? result.id;
+        const messageId = requireSentMessageMetadata(result, 'status@broadcast').id;
         
         // Push an inert schedule explicitly so the Status Analytics view tracks its total views dynamically
         await this.scheduleService.createSchedule(clientId, {
@@ -653,7 +669,7 @@ export default class BotController {
         const result = await client.sendMessage('status@broadcast', media, args);
         fs.unlinkSync(fullPath); 
         
-        const messageId = result.id?._serialized ?? result.id;
+        const messageId = requireSentMessageMetadata(result, 'status@broadcast').id;
         
         await this.scheduleService.createSchedule(clientId, {
             type: 'postMediaStatus',

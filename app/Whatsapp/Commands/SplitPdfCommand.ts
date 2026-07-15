@@ -5,6 +5,7 @@ import path from 'path'
 import tmp from 'tmp'
 import Env from '@ioc:Adonis/Core/Env'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class SplitPdfCommand {
   public type = 'Command'
@@ -29,8 +30,8 @@ export default class SplitPdfCommand {
       return
     }
 
-    const quotedMsg = await message.getQuotedMessage()
-    if (!quotedMsg.hasMedia) {
+    const quotedMsg = await getQuotedMessageSafely(message, 'SplitPdfCommand')
+    if (!quotedMsg || !quotedMsg.hasMedia) {
       await message.reply('Por favor, cite un archivo PDF.')
       return
     }

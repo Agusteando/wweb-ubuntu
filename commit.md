@@ -1,1 +1,1 @@
-Agrega comando QR para enlaces citados en WhatsApp
+Corrige el envío de mensajes y el manejo seguro de respuestas citadas

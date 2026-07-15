@@ -2,6 +2,7 @@
 import { Client, Message } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import { sendEmail } from 'App/Services/Utils'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class SendCommand {
   public type = 'Command'
@@ -27,11 +28,15 @@ export default class SendCommand {
                 }, {});
 
             if (message.hasQuotedMsg) {
-                var quotedMsg = await message.getQuotedMessage();
+                var quotedMsg = await getQuotedMessageSafely(message, 'SendCommand');
+                if (!quotedMsg) {
+                    await message.reply('No fue posible recuperar el mensaje citado. Vuelva a citar el mensaje e inténtelo nuevamente.');
+                    return;
+                }
                 const bodyText = quotedMsg.body || '';
                 argumentos.message = bodyText.replace(/\n/g, "<br>");
                 
-                if (quotedMsg.hasMedia) {
+                if (quotedMsg && quotedMsg.hasMedia) {
                     var media = await quotedMsg.downloadMedia();
                     session.adjuntados.push(media);
                     await message.reply("Archivo adjuntado exitosamente");

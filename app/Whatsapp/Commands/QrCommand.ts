@@ -1,6 +1,7 @@
 import { Client, Message, MessageMedia } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import * as QRCode from 'qrcode'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class QrCommand {
   public type = 'Command'
@@ -33,7 +34,12 @@ export default class QrCommand {
       return
     }
 
-    const quotedMsg = await message.getQuotedMessage()
+    const quotedMsg = await getQuotedMessageSafely(message, 'QrCommand')
+    if (!quotedMsg) {
+      await message.reply('No fue posible recuperar el mensaje citado. Vuelva a citarlo e inténtelo nuevamente.')
+      return
+    }
+
     const quotedText = quotedMsg.body || ''
     const link = this.extractFirstLink(quotedText)
 

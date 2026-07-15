@@ -3,6 +3,7 @@ import { UserSession } from 'App/Services/SessionManager'
 import { getGoogleAdminAuth } from 'App/Services/Utils'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class DriveCommand {
   public type = 'Command'
@@ -256,8 +257,8 @@ export default class DriveCommand {
           return message.reply("⚠️ *Requisito:* Debes citar un mensaje tuyo o de otro usuario que contenga un archivo adjunto para usar este comando.");
         }
 
-        const quotedMsg = await message.getQuotedMessage();
-        if (!quotedMsg.hasMedia) {
+        const quotedMsg = await getQuotedMessageSafely(message, 'DriveCommand');
+        if (!quotedMsg || !quotedMsg.hasMedia) {
           return message.reply("⚠️ El mensaje citado no contiene ningún archivo físico o multimedia detectado.");
         }
 

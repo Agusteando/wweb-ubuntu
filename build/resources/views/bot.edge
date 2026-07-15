@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Orquestador de WhatsApp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } };</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
+  
+  <!-- Bundled FullCalendar Core -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  
+  <script src="/whatsapp-manager/resources/js/bot.js?v=5.0.0" defer></script>
+  
+  <style>
+    body { background-color: #f8fafc; }
+    .spinner { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+    .spinner-dark { border-color: rgba(99, 102, 241, 0.2); border-top-color: #4f46e5; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .monaco-editor-container { height: calc(100vh - 200px); min-height: 400px; width: 100%; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    
+    /* FullCalendar Overrides for low-contrast elegant UI */
+    .fc { font-family: inherit !important; }
+    .fc .fc-toolbar-title { font-size: 1.15rem !important; font-weight: 700; color: #1e293b; text-transform: capitalize; }
+    .fc-theme-standard td, .fc-theme-standard th { border-color: #f1f5f9; }
+    .fc-col-header-cell-cushion { padding: 8px 4px !important; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase; }
+    .fc-daygrid-day-number { font-size: 0.85rem; font-weight: 500; color: #475569; }
+    .fc-event { border: none !important; border-radius: 6px; padding: 3px 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: opacity 0.2s; }
+    .fc-event:hover { opacity: 0.85; }
+    .fc-button-primary { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #475569 !important; font-weight: 600 !important; font-size: 0.85rem !important; text-transform: capitalize !important; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important; border-radius: 8px !important; transition: all 0.2s; }
+    .fc-button-primary:hover { background-color: #f8fafc !important; color: #1e293b !important; }
+    .fc-button-primary:not(:disabled).fc-button-active { background-color: #eff6ff !important; color: #1d4ed8 !important; border-color: #bfdbfe !important; }
+  </style>
+</head>
+<body class="text-slate-800 font-sans h-screen flex flex-col overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
+
+  <div id="app-data" class="hidden" data-commands="{{ commandFilesJson }}" data-modules="{{ modulesMetadataJson }}" data-integration-base-url="{{ integrationBaseUrl }}"></div>
+  <div id="toast-container" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+
+  <nav class="bg-[#0f172a] shadow-md text-white shrink-0 relative z-10 border-b border-slate-800">
+    <div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl flex items-center justify-center shadow-sm">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+          </div>
+          <span class="font-bold text-[1.1rem] tracking-tight">Orquestador de WhatsApp</span>
+        </div>
+        <div class="flex items-center space-x-1">
+          <button data-action="switch-tab" data-target="clients" id="tab-clients-btn" class="px-4 py-2 rounded-lg font-semibold text-sm bg-indigo-600/20 text-indigo-300 shadow-inner transition-all">Instancias</button>
+          <button data-action="switch-tab" data-target="api" id="tab-api-btn" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all">Servicios API</button>
+          <button data-action="switch-tab" data-target="editor" id="tab-editor-btn" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all">Editor de Lógica</button>
+          <button data-action="switch-tab" data-target="planner" id="tab-planner-btn" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all">Planificador</button>
+          <button data-action="switch-tab" data-target="analytics" id="tab-analytics-btn" class="px-4 py-2 rounded-lg font-semibold text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all">Análisis de Estados</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===============================
+       TAB: CLIENTS
+       =============================== -->
+  <main id="tab-clients" class="flex-grow overflow-y-auto w-full bg-slate-50/50">
+    <div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <div class="bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 transition-shadow">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-800 tracking-tight flex items-center">
+            Desplegar Nueva Instancia
+            <button data-action="toggle-global-api-docs" class="ml-4 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full font-bold hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center">
+              <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              API Global Estable
+            </button>
+          </h2>
+          <p class="text-sm text-slate-500 mt-1 font-medium">Inicialice una sesión de cliente de WhatsApp independiente con su propio número.</p>
+        </div>
+        <form action="/whatsapp-manager/bot/add" method="POST" class="flex gap-3 w-full md:w-auto">
+          <input type="text" name="clientId" placeholder="ID de la Instancia (ej. VentasBot)" class="flex-grow md:w-80 px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-sm font-medium" />
+          <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-semibold shadow-sm transition-all active:scale-95 flex items-center justify-center whitespace-nowrap">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Desplegar
+          </button>
+        </form>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="client-list">
+        @if(!clients || clients.length === 0)
+          <div class="col-span-full flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-dashed border-slate-300">
+            <div class="bg-slate-100 p-5 rounded-2xl mb-4">
+              <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <p class="text-slate-700 text-lg font-bold">No hay instancias activas</p>
+            <p class="text-slate-500 text-sm mt-1 font-medium">Despliegue una instancia arriba para generar un código QR.</p>
+          </div>
+        @else
+          @each(client in clients)
+            <div class="bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-lg" id="client-{{ client.clientId }}">
+              <div class="p-6 flex-grow">
+                <div class="flex justify-between items-start mb-5">
+                  <div class="flex items-center gap-2 max-w-[65%]">
+                    <div class="w-2.5 h-2.5 rounded-full {{ client.status === 'Connected' ? 'bg-emerald-500' : (client.status === 'QR Received' ? 'bg-blue-500' : (client.status === 'Error' ? 'bg-red-500' : 'bg-amber-400')) }}"></div>
+                    <h3 class="font-extrabold text-lg text-slate-800 truncate" title="{{ client.clientId }}">{{ client.clientId }}</h3>
+                  </div>
+                  <span class="client-status px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider whitespace-nowrap
+                    {{ client.status === 'Connected' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (client.status === 'QR Received' ? 'bg-blue-50 text-blue-700 border border-blue-200' : (client.status === 'Error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200')) }}">
+                    {{ client.status }}
+                  </span>
+                </div>
+                
+                <div class="flex justify-center mb-6 bg-slate-50 rounded-2xl p-4 h-48 border border-slate-100 relative items-center shadow-inner">
+                  <div class="qr-canvas flex justify-center items-center w-full h-full" id="qr-{{ client.clientId }}">
+                    <div class="spinner spinner-dark"></div>
+                  </div>
+                </div>
+
+                <div class="border-t border-slate-100 pt-4">
+                  <div class="flex justify-between items-center mb-3">
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                      Lógica Asignada
+                    </p>
+                    <button data-action="open-modal" data-client="{{ client.clientId }}" data-commands="{{ JSON.stringify(client.commandFiles) }}" class="text-[11px] text-indigo-700 font-bold bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors">Configurar</button>
+                  </div>
+                  <div class="flex flex-col gap-2" id="badges-{{ client.clientId }}">
+                    @if(client.commandFiles.length === 0)
+                      <span class="text-sm text-slate-400 font-medium block w-full bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">Sin lógica asignada</span>
+                    @else
+                      @each(cmd in client.commandFiles)
+                        <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg pr-2 pl-3 py-1.5 group shadow-sm">
+                          <span class="text-xs font-semibold text-slate-700 truncate mr-2">{{ cmd }}</span>
+                          <button data-action="open-rules-modal" data-client="{{ client.clientId }}" data-command="{{ cmd }}" data-rules="{{ JSON.stringify(client.commandRules) }}" class="text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors" title="Gestionar Reglas y Excepciones">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                          </button>
+                        </div>
+                      @endeach
+                    @endif
+                  </div>
+                </div>
+              </div>
+              <div class="bg-slate-50/80 p-3 border-t border-slate-200 grid grid-cols-2 gap-2 shrink-0">
+                <button data-action="toggle-actions" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-xl font-semibold text-xs transition-all shadow-sm">Herramientas</button>
+                <form action="/whatsapp-manager/bot/remove" method="POST" class="w-full">
+                  <input type="hidden" name="clientId" value="{{ client.clientId }}" />
+                  <button type="submit" class="w-full py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl font-semibold text-xs transition-all shadow-sm">Eliminar</button>
+                </form>
+              </div>
+              
+              <div id="actions-{{ client.clientId }}" class="hidden p-5 bg-indigo-50/50 border-t border-indigo-100 shrink-0">
+                <div class="flex border-b border-indigo-200 mb-4">
+                  <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-indigo-700 border-b-2 border-indigo-700" data-target="qa-msg-{{client.clientId}}">Mensaje Directo</button>
+                  <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b-2 border-transparent hover:text-indigo-600" data-target="qa-status-{{client.clientId}}">Publicar Estado</button>
+                  <button type="button" class="qa-tab-btn flex-1 py-1.5 text-[11px] uppercase tracking-wider font-extrabold text-slate-500 border-b-2 border-transparent hover:text-indigo-600" data-target="qa-api-{{client.clientId}}">Integracion API</button>
+                </div>
+
+                <form class="send-message-form qa-tab-content block flex flex-col gap-3" id="qa-msg-{{client.clientId}}" data-client-id="{{ client.clientId }}">
+                  <input type="text" name="chatId" placeholder="ID Destino (ej. 1234567890@c.us)" class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" required />
+                  <textarea name="message" rows="2" placeholder="Escribe tu mensaje..." class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" required></textarea>
+                  <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm flex justify-center items-center">Enviar Mensaje</button>
+                </form>
+
+                <form class="post-status-form qa-tab-content hidden flex flex-col gap-3" id="qa-status-{{client.clientId}}" data-client-id="{{ client.clientId }}">
+                  <select name="statusType" class="qa-status-type w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all">
+                    <option value="text">Estado de Texto</option>
+                    <option value="image">Estado de Imagen</option>
+                    <option value="video">Estado de Video</option>
+                    <option value="gif">Estado de GIF</option>
+                    <option value="audio">Nota de Voz</option>
+                  </select>
+                  
+                  <div class="qa-status-text-fields block">
+                     <textarea name="statusText" rows="2" placeholder="¿Qué estás pensando?" class="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all qa-preview-trigger" required></textarea>
+                     <div class="flex gap-2 mt-2">
+                       <input type="color" name="backgroundColor" value="#eb0c0c" class="qa-preview-trigger h-10 px-1 border border-slate-300 rounded-lg shadow-sm cursor-pointer w-1/3">
+                       <select name="fontStyle" class="qa-preview-trigger w-2/3 px-3 py-2.5 border border-slate-300 rounded-lg text-xs font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all">
+                         <option value="0">0 - Sistema</option>
+                         <option value="1">1 - Texto Sistema</option>
+                         <option value="2">2 - Script</option>
+                         <option value="3">3 - Negrita</option>
+                         <option value="4">4 - Serif</option>
+                         <option value="7">7 - Monoespaciado</option>
+                       </select>
+                     </div>
+                     <div class="qa-text-preview mt-3 h-24 flex items-center justify-center text-center p-3 rounded-lg text-white font-medium break-all shadow-inner" style="background-color: #eb0c0c;">Vista Previa</div>
+                  </div>
+                  
+                  <div class="qa-status-media-fields hidden">
+                     <input type="file" name="file" accept="image/*,video/*,audio/*" class="qa-media-file w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-slate-300 p-1 rounded-lg bg-white transition-all" disabled>
+                     <textarea name="caption" rows="2" placeholder="Pie de foto opcional" class="w-full px-3 py-2.5 mt-3 border border-slate-300 rounded-lg text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all qa-preview-trigger"></textarea>
+                     <div class="qa-media-preview mt-3 text-center media-preview-container hidden relative border border-slate-200 bg-slate-900 rounded-lg p-1 overflow-hidden">
+                       <img class="max-h-24 mx-auto object-contain hidden">
+                       <video class="max-h-24 mx-auto object-contain hidden" controls></video>
+                     </div>
+                  </div>
+                  
+                  <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-sm transition-colors shadow-sm flex justify-center items-center">Publicar Estado</button>
+                </form>
+
+                <div class="qa-tab-content hidden flex flex-col gap-4" id="qa-api-{{client.clientId}}">
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Estado</p>
+                      <p class="text-sm font-extrabold text-slate-800">{{ client.integration.statusLabel }}</p>
+                      <p class="text-[11px] text-slate-500 mt-1">QR: {{ client.integration.qr.available ? 'Disponible' : 'No disponible' }}</p>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-1">Token Opcional</p>
+                      @if(client.integration.credentials.hasToken)
+                        <p class="text-sm font-mono font-extrabold text-slate-800">{{ client.integration.credentials.tokenPrefix }}...{{ client.integration.credentials.tokenLast4 }}</p>
+                      @else
+                        <p class="text-sm font-semibold text-slate-500">Tokenless por defecto</p>
+                      @endif
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" data-action="reconnect-instance" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl font-semibold text-xs transition-all shadow-sm">Reconectar</button>
+                    <button type="button" data-action="rotate-token" data-client="{{ client.clientId }}" class="py-2.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl font-semibold text-xs transition-all shadow-sm">Generar Token</button>
+                  </div>
+                  <textarea id="token-output-{{ client.clientId }}" readonly class="hidden w-full h-20 text-[11px] font-mono bg-slate-900 text-emerald-300 rounded-xl p-3 border border-slate-700"></textarea>
+
+                  <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Identificadores Estables</p>
+                    <div class="space-y-1 text-[11px] font-mono text-slate-600 break-all">
+                      <p>clientId={{ client.clientId }}</p>
+                      <p>integrationId={{ client.integration.integrationId }}</p>
+                    </div>
+                  </div>
+
+                  <div class="bg-slate-900 text-slate-100 rounded-xl p-3 shadow-inner overflow-x-auto">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Flujo de Integracion</p>
+                    <pre class="text-[10px] leading-relaxed font-mono whitespace-pre-wrap">1. POST {{ integrationBaseUrl }}/whatsapp-manager/integration/v1/instances
+   Idempotency-Key: stable-client-key
+   {"clientId":"ventas","displayName":"Ventas"}
+
+2. Open QR status:
+   GET {{ client.integration.endpoints.qrStatus }}
+
+3. Or stream QR updates:
+   GET {{ client.integration.endpoints.qrStream }}
+
+4. Check session:
+   GET {{ client.integration.endpoints.status }}
+
+5. Send with retry safety:
+   POST {{ client.integration.endpoints.sendMessage }}
+   Idempotency-Key: message-uuid
+   {"chatId":["5215555555555@c.us"],"message":"Hello"}
+
+Tokens are optional. Create, QR, status, reconnect, configure, and send all work tokenless by default.
+Errors use {"status":"error","error":{"code":"...","message":"..."}}.</pre>
+                  </div>
+
+                  <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <p class="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 mb-2">Actividad Reciente</p>
+                    @if(!client.recentActivity || client.recentActivity.length === 0)
+                      <p class="text-xs text-slate-400 font-medium">Sin actividad externa registrada.</p>
+                    @else
+                      <div class="space-y-2">
+                        @each(log in client.recentActivity)
+                          <div class="border border-slate-100 rounded-lg p-2 bg-slate-50">
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="text-[10px] font-bold uppercase {{ log.status === 'success' ? 'text-emerald-600' : (log.status === 'blocked' ? 'text-slate-500' : 'text-red-600') }}">{{ log.status }}</span>
+                              <span class="text-[10px] text-slate-400 font-mono">{{ new Date(log.timestamp).toLocaleString() }}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-700 font-semibold truncate mt-1">{{ log.payloadSummary }}</p>
+                            @if(log.error)
+                              <p class="text-[11px] text-red-600 mt-1">{{ log.error }}</p>
+                            @endif
+                          </div>
+                        @endeach
+                      </div>
+                    @endif
+                  </div>
+                </div>
+              </div>
+            </div>
+          @endeach
+        @endif
+      </div>
+    </div>
+  </main>
+
+  <!-- ===============================
+       TAB: API GATEWAY
+       =============================== -->
+  <main id="tab-api" class="hidden flex-grow w-full bg-slate-50/50 overflow-hidden flex flex-col">
+    <div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full shrink-0 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2.5 rounded-xl text-indigo-600 shadow-sm">
+           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-800">Servicios API</h2>
+          <p class="text-sm text-slate-500 font-medium">Controle la puerta de enlace global y supervise el tráfico.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-sm font-bold text-slate-700">Envío de Mensajes API:</span>
+        <label class="relative inline-flex items-center cursor-pointer ml-2">
+          <input type="checkbox" id="global-api-toggle" class="sr-only peer" {{ apiStatus ? 'checked' : '' }}>
+          <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+        </label>
+        <span id="api-status-label" class="text-[11px] font-extrabold uppercase tracking-wide {{ apiStatus ? 'text-emerald-600' : 'text-slate-400' }} ml-2">{{ apiStatus ? 'Activado' : 'Desactivado' }}</span>
+      </div>
+    </div>
+    
+    <div class="flex-grow max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 pb-8 overflow-hidden flex gap-6 w-full">
+       <!-- Left: Activity Log -->
+       <div class="flex flex-col w-2/3 bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden">
+         <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+           <h3 class="font-extrabold text-slate-700 text-sm tracking-wide uppercase flex items-center">
+             <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+             Registro de Actividad
+           </h3>
+           <div class="flex gap-2">
+             <button id="btn-refresh-logs" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Actualizar">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+             </button>
+             <button id="btn-clear-logs" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Limpiar">
+               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+             </button>
+           </div>
+         </div>
+         <div class="flex-grow overflow-y-auto custom-scrollbar p-5 space-y-3 bg-slate-50/30" id="api-logs-container">
+           <div class="flex justify-center py-10"><div class="spinner spinner-dark"></div></div>
+         </div>
+       </div>
+
+       <!-- Right: Contact Directory -->
+       <div class="flex flex-col w-1/3 bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden">
+         <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4 shrink-0">
+           <h3 class="font-extrabold text-slate-700 text-sm tracking-wide uppercase flex items-center">
+             <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+             Directorio
+           </h3>
+           <select id="directory-client-select" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white font-semibold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm cursor-pointer transition-all">
+             <option value="">Seleccionar Instancia...</option>
+             @each(client in clients)
+               <option value="{{ client.clientId }}">{{ client.clientId }}</option>
+             @endeach
+           </select>
+           <input type="text" id="directory-search" placeholder="Buscar contactos..." class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm transition-all">
+         </div>
+         <div class="flex-grow overflow-y-auto custom-scrollbar p-3" id="directory-contacts-container">
+           <div class="flex items-center justify-center h-full text-sm text-slate-400 font-medium text-center px-6">
+             Seleccione una instancia para ver sus contactos y grupos sincronizados.
+           </div>
+         </div>
+       </div>
+    </div>
+  </main>
+
+  <!-- ===============================
+       TAB: EDITOR
+       =============================== -->
+  <main id="tab-editor" class="hidden flex-grow w-full bg-slate-50/50 p-4 sm:p-6 lg:p-8 flex gap-6 overflow-hidden">
+    <aside class="w-80 flex flex-col bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden shrink-0">
+      <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <h3 class="font-extrabold text-slate-700 text-sm tracking-wide uppercase">Módulos de Lógica</h3>
+        <button data-action="create-file" class="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors shadow-sm" title="Nuevo Módulo">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        </button>
+      </div>
+      <div class="flex-grow overflow-y-auto p-4 space-y-1 custom-scrollbar" id="editor-file-list"></div>
+    </aside>
+
+    <section class="flex-grow flex flex-col bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden relative">
+      <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <h3 class="font-mono text-sm font-bold text-slate-600 flex items-center bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+          <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span id="current-file-name">Seleccione un módulo...</span>
+        </h3>
+        <button id="editor-save-btn" data-action="save-file" disabled class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center">
+          Guardar y Recargar
+        </button>
+      </div>
+      <div id="monaco-container" class="monaco-editor-container bg-[#1e1e1e] flex-grow relative w-full h-full"></div>
+    </section>
+  </main>
+
+  <!-- ===============================
+       TAB: CONTENT PLANNER
+       =============================== -->
+  <main id="tab-planner" class="hidden flex-grow w-full bg-slate-50/50 overflow-hidden flex flex-col">
+    <div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full shrink-0 flex items-center justify-between border-b border-slate-200/60 bg-white shadow-sm mb-6 rounded-b-3xl">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2.5 rounded-xl text-indigo-600 shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-800">Planificador de Contenido</h2>
+          <p class="text-sm text-slate-500 font-medium">Programe mensajes y estados multimedia.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <select id="planner-client-select" class="px-4 py-2 border border-slate-300 rounded-xl text-sm bg-slate-50 font-semibold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm cursor-pointer min-w-[220px] transition-all">
+          <option value="">Seleccionar Instancia...</option>
+        </select>
+        <div class="w-px h-8 bg-slate-200 mx-1"></div>
+        <button data-action="clear-all-schedules" class="px-5 py-2.5 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          Limpiar Todo
+        </button>
+        <button data-action="open-bulk-modal" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          Importar Lote
+        </button>
+        <button data-action="open-schedule-modal" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Programar
+        </button>
+      </div>
+    </div>
+    
+    <div class="flex-grow px-4 sm:px-6 lg:px-8 pb-8 overflow-y-auto w-full custom-scrollbar max-w-[1500px] mx-auto">
+      <div id="calendar" class="bg-white p-6 rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 h-full min-h-[650px]"></div>
+    </div>
+  </main>
+
+  <!-- ===============================
+       TAB: ANALYTICS
+       =============================== -->
+  <main id="tab-analytics" class="hidden flex-grow w-full bg-slate-50/50 overflow-hidden flex flex-col">
+    <div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full shrink-0 flex items-center justify-between border-b border-slate-200/60 bg-white shadow-sm mb-6 rounded-b-3xl">
+      <div class="flex items-center gap-4">
+        <div class="bg-indigo-100 p-2.5 rounded-xl text-indigo-600 shadow-sm">
+           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        </div>
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-800">Análisis de Estados</h2>
+          <p class="text-sm text-slate-500 font-medium">Rendimiento de vistas e interacciones.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <select id="analytics-client-select" class="px-4 py-2 border border-slate-300 rounded-xl text-sm bg-slate-50 font-semibold outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm cursor-pointer min-w-[220px] transition-all">
+          <option value="">Seleccionar Instancia...</option>
+        </select>
+        <button id="btn-refresh-analytics" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold shadow-sm transition-all flex items-center">
+          Actualizar Métricas
+        </button>
+      </div>
+    </div>
+    <div class="flex-grow px-4 sm:px-6 lg:px-8 pb-8 overflow-y-auto w-full custom-scrollbar max-w-[1500px] mx-auto">
+       <div class="bg-white rounded-3xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 overflow-hidden">
+           <table class="min-w-full divide-y divide-slate-200">
+             <thead class="bg-slate-50/80">
+               <tr>
+                 <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase tracking-wider">Fecha / Hora</th>
+                 <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase tracking-wider">Tipo</th>
+                 <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase tracking-wider">Detalles / Contenido</th>
+                 <th class="px-6 py-4 text-left text-xs font-extrabold text-slate-500 uppercase tracking-wider">Vistas Registradas</th>
+               </tr>
+             </thead>
+             <tbody id="analytics-table-body" class="bg-white divide-y divide-slate-100">
+                <tr><td colspan="4" class="px-6 py-12 text-center text-slate-500 text-sm font-medium">Seleccione una instancia para ver el rendimiento histórico</td></tr>
+             </tbody>
+           </table>
+       </div>
+    </div>
+  </main>
+
+
+  <!-- ===============================
+       MODALS
+       =============================== -->
+
+  <!-- Config Modals: Assign Modules -->
+  <div id="commands-modal" class="fixed inset-0 z-[60] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]" id="commands-modal-content">
+      <div class="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+        <div>
+          <h3 class="font-extrabold text-2xl text-slate-800">Asignar Lógica</h3>
+          <p class="text-sm text-slate-500 mt-1 font-medium">Habilite o deshabilite funcionalidades para esta instancia.</p>
+        </div>
+        <button data-action="close-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2.5 transition-colors border border-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-8 flex-grow overflow-hidden flex flex-col min-h-0">
+        <form id="commands-form" class="h-full flex flex-col min-h-0">
+          <input type="hidden" id="modal-client-id" name="clientId">
+          
+          <!-- Contenedor con Scroll para las listas de asignación -->
+          <div class="overflow-y-auto custom-scrollbar flex-grow pr-4 pb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <!-- Columna Comandos -->
+              <div>
+                <h4 class="text-sm font-extrabold text-indigo-700 uppercase tracking-wider mb-4 flex items-center">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M4 15h16a1 1 0 001-1V6a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1z"></path></svg>
+                  Comandos (Activos)
+                </h4>
+                <p class="text-xs text-slate-500 mb-4 font-medium">Responden a palabras clave específicas (ej. !ayuda).</p>
+                <div class="space-y-3" id="modal-commands-list"></div>
+              </div>
+              
+              <!-- Columna Automatizaciones -->
+              <div>
+                <h4 class="text-sm font-extrabold text-emerald-600 uppercase tracking-wider mb-4 flex items-center">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  Automatizaciones (Pasivas)
+                </h4>
+                <p class="text-xs text-slate-500 mb-4 font-medium">Reaccionan en segundo plano a eventos o tipos de mensaje.</p>
+                <div class="space-y-3" id="modal-automations-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex justify-end gap-3 pt-6 border-t border-slate-100 shrink-0">
+            <button type="submit" class="px-8 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-all flex items-center">
+              Guardar Configuración
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal" class="fixed inset-0 z-[70] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="rules-modal-content">
+      <div class="px-8 py-6 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50/50">
+        <div>
+          <h3 class="font-extrabold text-xl text-slate-800">Reglas y Excepciones</h3>
+          <p class="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-100 inline-block px-2.5 py-1 rounded-md mt-2" id="rules-command-display"></p>
+        </div>
+        <button data-action="close-rules-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2 transition-colors border border-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-8 flex-grow overflow-hidden flex flex-col">
+        <form id="rules-form" class="flex flex-col h-full">
+          <div id="rules-chats-list" class="flex-grow overflow-y-auto custom-scrollbar pr-3"></div>
+          <div class="mt-6 flex justify-end gap-3 pt-6 border-t border-slate-100 shrink-0">
+            <button type="submit" class="px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition-all flex items-center">Guardar Reglas</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Schedule Modal -->
+  <div id="schedule-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]" id="schedule-modal-content">
+      <div class="px-8 py-6 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50/50">
+        <div>
+          <h3 class="font-extrabold text-xl text-slate-800 flex items-center">
+            Definir Programación
+          </h3>
+          <p class="text-sm text-slate-500 mt-1 font-medium">Configure un nuevo evento en el calendario.</p>
+        </div>
+        <button data-action="close-schedule-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2 border border-slate-200 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-8 flex-grow overflow-y-auto custom-scrollbar bg-white">
+        <form id="schedule-form" class="space-y-6">
+          <div>
+            <label class="block text-sm font-extrabold text-slate-700 mb-2">Tipo de Contenido</label>
+            <select id="schedule-type" name="type" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm cursor-pointer transition-all">
+              <option value="message">Mensaje / Archivo Directo</option>
+              <option value="postTextStatus">Estado de Texto</option>
+              <option value="postMediaStatus">Estado de Imagen/Video</option>
+              <option value="revokeStatus">Eliminar Estado Existente</option>
+            </select>
+          </div>
+
+          <div id="schedule-fields-message" class="space-y-5 block">
+            <div class="bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
+              <div class="flex items-center justify-between mb-4">
+                <label class="block text-sm font-extrabold text-slate-700">Contactos / Grupos Destino</label>
+                <button type="button" id="btn-load-planner-chats" class="text-[11px] font-bold uppercase tracking-wider text-indigo-700 bg-white border border-indigo-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">Cargar Directorio</button>
+              </div>
+              <div id="planner-chats-container" class="hidden max-h-48 overflow-y-auto custom-scrollbar border border-slate-200 bg-white rounded-xl p-2 space-y-1 shadow-inner"></div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-extrabold text-slate-700 mb-2">Cuerpo del Mensaje</label>
+              <textarea name="message" rows="3" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" required></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-5">
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">Adjuntar Archivo</label>
+                <input type="file" name="messageFile" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-slate-300 p-1.5 rounded-xl bg-white transition-all">
+              </div>
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">O URL Absoluta</label>
+                <input type="text" name="mediaPath" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" placeholder="https://...">
+              </div>
+            </div>
+          </div>
+
+          <div id="schedule-fields-text-status" class="hidden space-y-5">
+            <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 text-sm font-medium text-indigo-800 mb-2 flex items-start gap-3">
+              <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Publicará un Estado (Historia) de texto con fondo de color a todos sus contactos.
+            </div>
+            <div>
+              <label class="block text-sm font-extrabold text-slate-700 mb-2">Texto del Estado</label>
+              <textarea name="statusText" rows="2" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm status-preview-trigger transition-all" placeholder="¿Qué estás pensando?"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-5 mt-2">
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">Color de Fondo</label>
+                <input type="color" name="backgroundColor" value="#eb0c0c" class="status-preview-trigger w-full h-11 px-1.5 py-1.5 border border-slate-300 rounded-xl shadow-sm cursor-pointer">
+              </div>
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">Estilo de Fuente</label>
+                <select name="fontStyle" class="status-preview-trigger w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm cursor-pointer transition-all">
+                  <option value="0">0 - Sistema</option>
+                  <option value="1">1 - Texto Sistema</option>
+                  <option value="2">2 - Script</option>
+                  <option value="3">3 - Negrita</option>
+                  <option value="4">4 - Serif</option>
+                  <option value="7">7 - Monoespaciado</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-4 rounded-2xl h-44 flex items-center justify-center p-6 text-center break-all text-white font-bold text-xl status-text-preview transition-colors shadow-inner" style="background-color: #eb0c0c;">
+              Vista Previa
+            </div>
+          </div>
+
+          <div id="schedule-fields-media-status" class="hidden space-y-5">
+            <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 text-sm font-medium text-indigo-800 mb-2 flex items-start gap-3">
+              <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Publicará una Imagen o Video como Estado (Historia) a todos sus contactos.
+            </div>
+            
+            <div class="grid grid-cols-2 gap-5">
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">Subir Archivo</label>
+                <input type="file" name="statusMediaFile" accept="image/*,video/*,audio/*" class="planner-media-file w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border border-slate-300 p-1.5 rounded-xl bg-white transition-all">
+              </div>
+              <div>
+                <label class="block text-sm font-extrabold text-slate-700 mb-2">O URL / Ruta Local</label>
+                <input type="text" name="statusMediaPath" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" placeholder="https://...">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-extrabold text-slate-700 mb-2">Pie de foto (Opcional)</label>
+              <textarea name="statusCaption" rows="2" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" placeholder="Escriba aquí..."></textarea>
+            </div>
+
+            <div class="flex gap-6 mt-2">
+               <label class="flex items-center text-sm font-bold text-slate-700 gap-2 cursor-pointer"><input type="checkbox" name="statusIsGif" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 transition-all"> Video como GIF</label>
+               <label class="flex items-center text-sm font-bold text-slate-700 gap-2 cursor-pointer"><input type="checkbox" name="statusIsAudio" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 transition-all"> Como Nota de Voz</label>
+            </div>
+
+            <div class="media-preview-container mt-4 hidden bg-slate-900 rounded-2xl p-2 relative overflow-hidden border border-slate-200">
+              <img class="max-h-48 mx-auto object-contain hidden rounded-xl">
+              <video class="max-h-48 mx-auto object-contain hidden rounded-xl" controls></video>
+            </div>
+          </div>
+
+          <div id="schedule-fields-revoke" class="hidden space-y-5">
+            <div class="bg-red-50/50 p-4 rounded-2xl border border-red-100 text-sm font-medium text-red-800 mb-2 flex items-start gap-3">
+              <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+              Proporcione el ID exacto del mensaje del Estado que desea eliminar de WhatsApp.
+            </div>
+            <div>
+              <label class="block text-sm font-extrabold text-slate-700 mb-2">ID del Mensaje a Eliminar</label>
+              <input type="text" name="revokeMessageId" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm transition-all" placeholder="true_status@broadcast_3EB0XXXXX">
+            </div>
+          </div>
+
+          <hr class="border-slate-200">
+
+          <div>
+            <label class="block text-sm font-extrabold text-slate-700 mb-3">Cronograma de Ejecución</label>
+            <div class="flex bg-slate-100/80 rounded-2xl p-1.5 mb-5 border border-slate-200 shadow-inner">
+              <button type="button" data-schedule-mode="false" class="schedule-mode-btn flex-1 py-2 text-sm font-bold bg-white text-indigo-700 shadow-sm rounded-xl transition-all">Única Vez</button>
+              <button type="button" data-schedule-mode="true" class="schedule-mode-btn flex-1 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 rounded-xl transition-all">Recurrente</button>
+            </div>
+            <input type="hidden" name="isRecurring" id="schedule-isRecurring" value="false">
+            
+            <div id="schedule-timing-one-time">
+              <input type="datetime-local" name="datetime" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none shadow-sm cursor-pointer transition-all" required>
+            </div>
+
+            <div id="schedule-timing-recurring" class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-5">
+              <div class="grid grid-cols-2 gap-5">
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wider">Patrón</label>
+                  <select name="recurrenceType" id="schedule-recurrence-type" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium bg-white outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm transition-all">
+                    <option value="daily">Diario</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensual</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wider">Hora</label>
+                  <input type="time" name="recurrenceTime" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium bg-white outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm transition-all">
+                </div>
+              </div>
+              
+              <div id="schedule-recurrence-weekly" class="hidden">
+                <label class="block text-[11px] font-extrabold text-slate-500 mb-2.5 uppercase tracking-wider">Días de la semana</label>
+                <div class="flex gap-3 flex-wrap">
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="1" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Lun</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="2" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Mar</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="3" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Mié</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="4" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Jue</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="5" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Vie</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="6" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Sáb</label>
+                  <label class="flex items-center text-sm font-semibold gap-1.5"><input type="checkbox" value="0" class="planner-dow rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"> Dom</label>
+                </div>
+              </div>
+
+              <div id="schedule-recurrence-monthly" class="hidden">
+                <label class="block text-[11px] font-extrabold text-slate-500 mb-1.5 uppercase tracking-wider">Día del Mes (1-31)</label>
+                <input type="number" name="recurrenceDayOfMonth" min="1" max="31" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-medium bg-white outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm transition-all">
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="p-6 border-t border-slate-100 shrink-0 bg-slate-50/50 flex justify-end gap-3 rounded-b-3xl">
+        <button type="button" data-action="close-schedule-modal" class="px-6 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-bold shadow-sm transition-all hover:bg-slate-50">Cancelar</button>
+        <button type="button" id="btn-save-schedule" class="px-8 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition-all">Guardar Evento</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Import Modal -->
+  <div id="bulk-import-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col" id="bulk-import-modal-content">
+      <div class="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <div>
+          <h3 class="font-extrabold text-xl text-slate-800">Importación Rápida JSON</h3>
+          <p class="text-sm text-slate-500 mt-1 font-medium">Cargue múltiples eventos al calendario simultáneamente.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a href="/whatsapp-manager/api/schedules/template" class="text-xs font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors shadow-sm flex items-center" download>
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            Plantilla
+          </a>
+          <button data-action="close-bulk-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm rounded-full p-2 border border-slate-200 transition-colors ml-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div class="p-8">
+        <textarea id="bulk-import-data" rows="10" class="w-full px-5 py-4 border border-slate-300 rounded-2xl font-mono text-sm focus:ring-4 focus:ring-indigo-500/20 outline-none shadow-inner bg-slate-900 text-emerald-400 custom-scrollbar transition-all" placeholder='[\n  {\n    "type": "postTextStatus",\n    "statusText": "¡Nuevo Estado!",\n    "backgroundColor": "#eb0c0c",\n    "fontStyle": 1,\n    "isRecurring": false,\n    "timestamp": 1720000000000\n  }\n]'></textarea>
+      </div>
+      <div class="p-6 border-t border-slate-100 flex justify-end bg-slate-50/50 rounded-b-3xl">
+        <button type="button" id="btn-execute-bulk" class="px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition-all flex items-center">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Procesar Importación
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View/Delete Event Modal -->
+  <div id="view-schedule-modal" class="fixed inset-0 z-[80] hidden bg-slate-900/60 backdrop-blur-sm flex justify-center items-center opacity-0 transition-opacity duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col" id="view-schedule-modal-content">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h3 class="font-extrabold text-lg text-slate-800">Detalles del Evento</h3>
+        <button data-action="close-view-schedule-modal" class="text-slate-400 hover:text-slate-800 bg-white shadow-sm border border-slate-200 rounded-full p-1.5 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 bg-white space-y-4">
+        <div class="text-xs font-mono bg-slate-100 text-slate-600 px-4 py-3 rounded-xl break-all border border-slate-200 shadow-inner" id="view-schedule-payload"></div>
+        <div class="mt-4 text-center" id="view-schedule-views-container">
+           <span class="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+             <span id="view-schedule-views-count">0</span> Vistas
+           </span>
+        </div>
+      </div>
+      <div class="p-5 border-t border-slate-100 bg-slate-50/50 flex justify-center rounded-b-3xl">
+        <button type="button" id="btn-delete-schedule" class="w-full py-3 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl text-sm font-bold transition-all shadow-sm">
+          Eliminar Evento
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

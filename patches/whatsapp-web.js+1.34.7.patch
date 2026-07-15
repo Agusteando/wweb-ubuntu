@@ -1,8 +1,48 @@
-diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-index 540078a..5fa1acd 100644
+--- a/node_modules/whatsapp-web.js/src/structures/Message.js
++++ b/node_modules/whatsapp-web.js/src/structures/Message.js
+@@ -432,19 +432,28 @@
+         if (!this.hasQuotedMsg) return undefined;
+ 
+         const quotedMsg = await this.client.pupPage.evaluate(async (msgId) => {
+-            const msg =
+-                window.require('WAWebCollections').Msg.get(msgId) ||
+-                (
+-                    await window
+-                        .require('WAWebCollections')
+-                        .Msg.getMessagesById([msgId])
+-                )?.messages?.[0];
+-            const quotedMsg = window
+-                .require('WAWebQuotedMsgModelUtils')
+-                .getQuotedMsgObj(msg);
+-            return window.WWebJS.getMessageModel(quotedMsg);
++            try {
++                const msg =
++                    window.require('WAWebCollections').Msg.get(msgId) ||
++                    (
++                        await window
++                            .require('WAWebCollections')
++                            .Msg.getMessagesById([msgId])
++                    )?.messages?.[0];
++                if (!msg) return null;
++
++                const quotedMsg = window
++                    .require('WAWebQuotedMsgModelUtils')
++                    .getQuotedMsgObj(msg);
++                if (!quotedMsg) return null;
++
++                return window.WWebJS.getMessageModel(quotedMsg);
++            } catch (_error) {
++                return null;
++            }
+         }, this.id._serialized);
+ 
++        if (!quotedMsg) return undefined;
+         return new Message(this.client, quotedMsg);
+     }
+ 
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 +++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-@@ -548,7 +548,7 @@ exports.LoadUtils = () => {
+@@ -548,7 +548,7 @@
                      ),
                      cannotBeRanked: window
                          .require('WAWebStatusGatingUtils')

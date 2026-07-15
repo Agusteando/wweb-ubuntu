@@ -1,6 +1,7 @@
 import { Client, Message, MessageMedia } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import axios from 'axios'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 function extractOrdenFromText(s: string): string {
   return (s || '').toString().trim()
@@ -23,9 +24,9 @@ export default class OrdenCommand {
 
     // WhatsApp behavior: Check if quoting/replying to a message
     if (message.hasQuotedMsg) {
-      const quotedMsg = await message.getQuotedMessage()
+      const quotedMsg = await getQuotedMessageSafely(message, 'OrdenCommand')
       // Extract from the quoted message's body/caption
-      orden = extractOrdenFromText(quotedMsg.body)
+      if (quotedMsg) orden = extractOrdenFromText(quotedMsg.body)
     } else {
       // Remove the command text and extract the leftover arguments
       const textWithoutCmd = body.replace(/^(!|\/)orden\b/i, '').trim()

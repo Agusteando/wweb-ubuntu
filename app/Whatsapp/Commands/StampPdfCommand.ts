@@ -4,6 +4,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import tmp from 'tmp'
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class StampPdfCommand {
   public type = 'Command'
@@ -28,8 +29,8 @@ export default class StampPdfCommand {
       return
     }
 
-    const quotedMsg = await message.getQuotedMessage()
-    if (!quotedMsg.hasMedia) {
+    const quotedMsg = await getQuotedMessageSafely(message, 'StampPdfCommand')
+    if (!quotedMsg || !quotedMsg.hasMedia) {
       await message.reply('Por favor, cite un archivo PDF.')
       return
     }

@@ -4,6 +4,7 @@ import { getGoogleAdminAuth } from 'App/Services/Utils'
 import { google } from 'googleapis'
 import fs from 'fs'
 import Application from '@ioc:Adonis/Core/Application'
+import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class UploadDriveCommand {
   public type = 'Command'
@@ -21,8 +22,8 @@ export default class UploadDriveCommand {
         const drive = google.drive({ version: 'v3', auth: jwtClient });
 
         if (message.hasQuotedMsg) {
-            const quotedMsg = await message.getQuotedMessage();
-            if (quotedMsg.hasMedia) {
+            const quotedMsg = await getQuotedMessageSafely(message, 'UploadDriveCommand');
+            if (quotedMsg && quotedMsg.hasMedia) {
                 const media = await quotedMsg.downloadMedia();
 
                 if (media) {

@@ -1,0 +1,53 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const Env_1 = __importDefault(global[Symbol.for('ioc.use')]("Adonis/Core/Env"));
+exports.default = Env_1.default.rules({
+    HOST: Env_1.default.schema.string({ format: 'host' }),
+    PORT: Env_1.default.schema.number(),
+    APP_KEY: Env_1.default.schema.string(),
+    APP_NAME: Env_1.default.schema.string(),
+    NODE_ENV: Env_1.default.schema.enum(['development', 'production', 'test']),
+    WA_SESSION_DIR: Env_1.default.schema.string(),
+    GOOGLE_CREDENTIALS_PATH: Env_1.default.schema.string(),
+    G_SUITE_ADMIN_EMAIL: Env_1.default.schema.string.optional(),
+    G_SUITE_DOMAIN: Env_1.default.schema.string.optional(),
+    DRIVE_DEFAULT_FOLDER_ID: Env_1.default.schema.string.optional(),
+    OPENAI_API_KEY: Env_1.default.schema.string.optional(),
+    ADOBE_CLIENT_ID: Env_1.default.schema.string.optional(),
+    ADOBE_CLIENT_SECRET: Env_1.default.schema.string.optional(),
+    ADOBE_ORGANIZATION_ID: Env_1.default.schema.string.optional(),
+    ADMIN_USERNAME: Env_1.default.schema.string(),
+    ADMIN_PASSWORD: Env_1.default.schema.string(),
+    INTEGRATION_ADMIN_TOKEN: Env_1.default.schema.string.optional(),
+    INTEGRATION_PUBLIC_BASE_URL: Env_1.default.schema.string.optional(),
+    WA_SESSION_BACKUP_RETENTION: Env_1.default.schema.string.optional(),
+    WA_SESSION_BACKUP_MAX_MB: Env_1.default.schema.string.optional(),
+    WA_SESSION_BACKUP_MAX_AGE_DAYS: Env_1.default.schema.string.optional(),
+    WA_SESSION_SNAPSHOT_MIN_INTERVAL_MS: Env_1.default.schema.string.optional(),
+    WA_REMOVE_CLIENT_SESSION_POLICY: Env_1.default.schema.string.optional(),
+    WA_HEALTH_INTERVAL_MS: Env_1.default.schema.string.optional(),
+    WA_READY_TIMEOUT_MS: Env_1.default.schema.string.optional(),
+    WA_PROBE_TIMEOUT_MS: Env_1.default.schema.string.optional(),
+    WA_RECOVERY_FAILURE_THRESHOLD: Env_1.default.schema.string.optional(),
+    WA_RECOVERY_DELAY_MS: Env_1.default.schema.string.optional(),
+    WA_RECOVERY_BACKOFF_MS: Env_1.default.schema.string.optional(),
+    WA_DESTROY_TIMEOUT_MS: Env_1.default.schema.string.optional(),
+    WA_SHUTDOWN_TIMEOUT_MS: Env_1.default.schema.string.optional(),
+    WA_SCHEDULED_RECYCLE_HOURS: Env_1.default.schema.string.optional(),
+    BUENAINFANCIA_USERNAME: Env_1.default.schema.string.optional(),
+    BUENAINFANCIA_PASSWORD: Env_1.default.schema.string.optional(),
+    DB_HOST: Env_1.default.schema.string.optional(),
+    DB_USER: Env_1.default.schema.string.optional(),
+    DB_PASSWORD: Env_1.default.schema.string.optional(),
+    DB_DATABASE: Env_1.default.schema.string.optional(),
+    ATTENDANCE_REPORT_ENDPOINT: Env_1.default.schema.string.optional(),
+    SSN_RSS_URL: Env_1.default.schema.string.optional(),
+    SSN_CHECK_INTERVAL_MS: Env_1.default.schema.string.optional(),
+    SSN_MAJOR_MAGNITUDE_THRESHOLD: Env_1.default.schema.string.optional(),
+    SSN_MAJOR_ALERT_CHAT_IDS: Env_1.default.schema.string.optional(),
+    SSN_MINOR_ALERT_CHAT_IDS: Env_1.default.schema.string.optional(),
+});
+//# sourceMappingURL=env.js.map
