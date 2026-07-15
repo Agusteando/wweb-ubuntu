@@ -1,1 +1,1 @@
-Corrige compatibilidad de IDs, envíos y medios con WhatsApp Web
+Corrige definitivamente la resolución de mensajes citados y archivos multimedia de WhatsApp

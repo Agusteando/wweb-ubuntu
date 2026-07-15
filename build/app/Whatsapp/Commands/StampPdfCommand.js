@@ -29,12 +29,7 @@ class StampPdfCommand {
             await message.reply('Por favor, proporcione un número de página inicial válido.');
             return;
         }
-        const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'StampPdfCommand');
-        if (!quotedMsg || !quotedMsg.hasMedia) {
-            await message.reply('Por favor, cite un archivo PDF.');
-            return;
-        }
-        const media = await quotedMsg.downloadMedia();
+        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'StampPdfCommand');
         if (!media || media.mimetype !== 'application/pdf') {
             await message.reply('Formato de archivo no soportado. Por favor, cite un archivo PDF.');
             return;

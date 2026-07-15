@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const Utils_1 = global[Symbol.for('ioc.use')]("App/Services/Utils");
+const QuotedMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/QuotedMessage");
 class MediaAutomation {
     constructor() {
         this.type = 'Automation';
@@ -9,7 +10,7 @@ class MediaAutomation {
     async handle(message, _client, session) {
         if (message.hasMedia) {
             try {
-                const media = await message.downloadMedia();
+                const media = await (0, QuotedMessage_1.downloadMessageMediaSafely)(message, 'MediaAutomation');
                 if (!media)
                     return;
                 const mimeType = media.mimetype;

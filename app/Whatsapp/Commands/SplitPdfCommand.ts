@@ -5,7 +5,7 @@ import path from 'path'
 import tmp from 'tmp'
 import Env from '@ioc:Adonis/Core/Env'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class SplitPdfCommand {
   public type = 'Command'
@@ -30,26 +30,7 @@ export default class SplitPdfCommand {
       return
     }
 
-    const quotedMsg = await getQuotedMessageSafely(message, 'SplitPdfCommand')
-    if (!quotedMsg) {
-      await message.reply(
-        'No fue posible recuperar el mensaje citado. Reenvíe el PDF al chat y responda directamente al nuevo mensaje con el comando !split.'
-      )
-      return
-    }
-
-    if (!quotedMsg.hasMedia) {
-      await message.reply('El mensaje citado no contiene un archivo. Por favor, cite un PDF.')
-      return
-    }
-
-    let media: MessageMedia | undefined
-    try {
-      media = await quotedMsg.downloadMedia()
-    } catch (error) {
-      console.warn('[SplitPdfCommand] Unable to download quoted media', error)
-    }
-
+    const media = await downloadQuotedMediaSafely(message, 'SplitPdfCommand')
     if (!media) {
       await message.reply(
         'El archivo citado ya no está disponible para descarga. Reenvíe el PDF y vuelva a ejecutar el comando.'
@@ -62,7 +43,7 @@ export default class SplitPdfCommand {
       return
     }
 
-    const pdfMedia = media
+    const pdfMedia: MessageMedia = media
 
     const credentials = PDFServicesSdk.Credentials.servicePrincipalCredentialsBuilder()
       .withClientId(clientId)

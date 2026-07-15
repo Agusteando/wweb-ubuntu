@@ -5,7 +5,7 @@ import path from 'path'
 import tmp from 'tmp'
 import Env from '@ioc:Adonis/Core/Env'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class PdfToImgCommand {
   public type = 'Command'
@@ -30,13 +30,7 @@ export default class PdfToImgCommand {
       return
     }
 
-    const quotedMsg = await getQuotedMessageSafely(message, 'PdfToImgCommand')
-    if (!quotedMsg || !quotedMsg.hasMedia) {
-      await message.reply('Por favor, cite un archivo PDF.')
-      return
-    }
-
-    const media = await quotedMsg.downloadMedia()
+    const media = await downloadQuotedMediaSafely(message, 'PdfToImgCommand')
     if (!media || media.mimetype !== 'application/pdf') {
       await message.reply('Formato de archivo no soportado. Por favor, cite un archivo PDF.')
       return

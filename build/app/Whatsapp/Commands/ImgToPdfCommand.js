@@ -23,12 +23,7 @@ class ImgToPdfCommand {
             await message.reply('Por favor, cite un archivo de imagen.');
             return;
         }
-        const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'ImgToPdfCommand');
-        if (!quotedMsg || !quotedMsg.hasMedia) {
-            await message.reply('Por favor, cite un archivo de imagen.');
-            return;
-        }
-        const media = await quotedMsg.downloadMedia();
+        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'ImgToPdfCommand');
         if (!media || !media.mimetype.startsWith('image/')) {
             await message.reply('Formato de archivo no soportado. Por favor, cite una imagen válida.');
             return;

@@ -2,7 +2,7 @@
 import { Client, Message } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import { sendEmail } from 'App/Services/Utils'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely, getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class SendCommand {
   public type = 'Command'
@@ -36,8 +36,12 @@ export default class SendCommand {
                 const bodyText = quotedMsg.body || '';
                 argumentos.message = bodyText.replace(/\n/g, "<br>");
                 
-                if (quotedMsg && quotedMsg.hasMedia) {
-                    var media = await quotedMsg.downloadMedia();
+                if (quotedMsg.hasMedia) {
+                    const media = await downloadQuotedMediaSafely(message, 'SendCommand');
+                    if (!media) {
+                        await message.reply('No fue posible descargar el archivo citado.');
+                        return;
+                    }
                     session.adjuntados.push(media);
                     await message.reply("Archivo adjuntado exitosamente");
                 }

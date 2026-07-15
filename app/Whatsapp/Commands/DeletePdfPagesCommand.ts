@@ -4,7 +4,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import tmp from 'tmp'
 import { PDFDocument } from 'pdf-lib'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class DeletePdfPagesCommand {
   public type = 'Command'
@@ -21,13 +21,7 @@ export default class DeletePdfPagesCommand {
       return
     }
 
-    const quotedMsg = await getQuotedMessageSafely(message, 'DeletePdfPagesCommand')
-    if (!quotedMsg || !quotedMsg.hasMedia) {
-      await message.reply('Por favor, cite un archivo PDF.')
-      return
-    }
-
-    const media = await quotedMsg.downloadMedia()
+    const media = await downloadQuotedMediaSafely(message, 'DeletePdfPagesCommand')
     if (!media || media.mimetype !== 'application/pdf') {
       await message.reply('Formato de archivo no soportado. Por favor, cite un archivo PDF.')
       return

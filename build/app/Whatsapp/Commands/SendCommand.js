@@ -31,8 +31,12 @@ class SendCommand {
                     }
                     const bodyText = quotedMsg.body || '';
                     argumentos.message = bodyText.replace(/\n/g, "<br>");
-                    if (quotedMsg && quotedMsg.hasMedia) {
-                        var media = await quotedMsg.downloadMedia();
+                    if (quotedMsg.hasMedia) {
+                        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'SendCommand');
+                        if (!media) {
+                            await message.reply('No fue posible descargar el archivo citado.');
+                            return;
+                        }
                         session.adjuntados.push(media);
                         await message.reply("Archivo adjuntado exitosamente");
                     }

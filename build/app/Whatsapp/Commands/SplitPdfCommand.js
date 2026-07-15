@@ -53,22 +53,7 @@ class SplitPdfCommand {
             await message.reply('Por favor, cite un archivo PDF.');
             return;
         }
-        const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'SplitPdfCommand');
-        if (!quotedMsg) {
-            await message.reply('No fue posible recuperar el mensaje citado. Reenvíe el PDF al chat y responda directamente al nuevo mensaje con el comando !split.');
-            return;
-        }
-        if (!quotedMsg.hasMedia) {
-            await message.reply('El mensaje citado no contiene un archivo. Por favor, cite un PDF.');
-            return;
-        }
-        let media;
-        try {
-            media = await quotedMsg.downloadMedia();
-        }
-        catch (error) {
-            console.warn('[SplitPdfCommand] Unable to download quoted media', error);
-        }
+        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'SplitPdfCommand');
         if (!media) {
             await message.reply('El archivo citado ya no está disponible para descarga. Reenvíe el PDF y vuelva a ejecutar el comando.');
             return;

@@ -1,6 +1,7 @@
 import { Client, Message } from 'whatsapp-web.js'
 import { UserSession } from 'App/Services/SessionManager'
 import { convertPdfToWord, convertWordToPdf } from 'App/Services/Utils'
+import { downloadMessageMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class MediaAutomation {
   public type = 'Automation'
@@ -9,7 +10,7 @@ export default class MediaAutomation {
   async handle(message: Message, _client: Client, session: UserSession) {
     if (message.hasMedia) {
         try {
-            const media = await message.downloadMedia();
+            const media = await downloadMessageMediaSafely(message, 'MediaAutomation');
             if (!media) return;
             const mimeType = media.mimetype;
 

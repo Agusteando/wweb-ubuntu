@@ -57,13 +57,8 @@ class PdfCommand {
         const executionContext = PDFServicesSdk.ExecutionContext.create(credentials);
         if (cmd === '!pdf2word' || cmd === '!pdf2doc') {
             if (message.hasQuotedMsg) {
-                const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'PdfCommand');
-                if (quotedMsg && quotedMsg.hasMedia) {
-                    const media = await quotedMsg.downloadMedia();
-                    if (!media) {
-                        await message.reply('No se pudo descargar el archivo.');
-                        return;
-                    }
+                const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'PdfCommand');
+                if (media) {
                     const mimeType = media.mimetype;
                     if (mimeType === 'application/pdf') {
                         await new Promise((resolve) => {
@@ -109,13 +104,8 @@ class PdfCommand {
         }
         else if (cmd === '!word2pdf' || cmd === '!doc2pdf') {
             if (message.hasQuotedMsg) {
-                const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'PdfCommand');
-                if (quotedMsg && quotedMsg.hasMedia) {
-                    const media = await quotedMsg.downloadMedia();
-                    if (!media) {
-                        await message.reply('No se pudo descargar el archivo.');
-                        return;
-                    }
+                const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'PdfCommand');
+                if (media) {
                     const mimeType = media.mimetype;
                     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                         await new Promise((resolve) => {

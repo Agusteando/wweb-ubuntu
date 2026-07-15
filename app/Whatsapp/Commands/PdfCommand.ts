@@ -5,7 +5,7 @@ import path from 'path'
 import Env from '@ioc:Adonis/Core/Env'
 import tmp from 'tmp'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class PdfCommand {
   public type = 'Command'
@@ -36,13 +36,8 @@ export default class PdfCommand {
 
     if (cmd === '!pdf2word' || cmd === '!pdf2doc') {
         if (message.hasQuotedMsg) {
-            const quotedMsg = await getQuotedMessageSafely(message, 'PdfCommand');
-            if (quotedMsg && quotedMsg.hasMedia) {
-                const media = await quotedMsg.downloadMedia();
-                if (!media) {
-                    await message.reply('No se pudo descargar el archivo.');
-                    return;
-                }
+            const media = await downloadQuotedMediaSafely(message, 'PdfCommand');
+            if (media) {
                 const mimeType = media.mimetype;
                 
                 if (mimeType === 'application/pdf') {
@@ -90,13 +85,8 @@ export default class PdfCommand {
     
     else if (cmd === '!word2pdf' || cmd === '!doc2pdf') {
         if (message.hasQuotedMsg) {
-            const quotedMsg = await getQuotedMessageSafely(message, 'PdfCommand');
-            if (quotedMsg && quotedMsg.hasMedia) {
-                const media = await quotedMsg.downloadMedia();
-                if (!media) {
-                    await message.reply('No se pudo descargar el archivo.');
-                    return;
-                }
+            const media = await downloadQuotedMediaSafely(message, 'PdfCommand');
+            if (media) {
                 const mimeType = media.mimetype;
                 
                 if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {

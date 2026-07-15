@@ -8,6 +8,7 @@ import axios from 'axios'
 import FormData from 'form-data'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
 import tmp from 'tmp'
+import { downloadMessageMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export async function getGoogleAdminAuth(scopes: string[], subjectEmail?: string) {
   const credPath = Env.get('GOOGLE_CREDENTIALS_PATH')
@@ -144,7 +145,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries: number, delayMs: numb
 }
 
 export async function createAudioPrediction2(message: any) {
-  const media = await message.downloadMedia();
+  const media = await downloadMessageMediaSafely(message, 'AudioTranscriptionAutomation');
   if (!media || !media.data) return null;
 
   return new Promise<any>((resolve, reject) => {

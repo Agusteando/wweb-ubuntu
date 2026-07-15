@@ -192,14 +192,10 @@ class DriveCommand {
                 if (!message.hasQuotedMsg) {
                     return message.reply("⚠️ *Requisito:* Debes citar un mensaje tuyo o de otro usuario que contenga un archivo adjunto para usar este comando.");
                 }
-                const quotedMsg = await (0, QuotedMessage_1.getQuotedMessageSafely)(message, 'DriveCommand');
-                if (!quotedMsg || !quotedMsg.hasMedia) {
-                    return message.reply("⚠️ El mensaje citado no contiene ningún archivo físico o multimedia detectado.");
-                }
                 await message.reply('⏳ Transfiriendo archivo citado a la nube de Google Drive...');
-                const media = await quotedMsg.downloadMedia();
+                const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'DriveCommand');
                 if (!media)
-                    return message.reply("❌ Ocurrió un error al descargar el archivo encriptado desde WhatsApp.");
+                    return message.reply("❌ No fue posible recuperar o descargar el archivo citado desde WhatsApp.");
                 const buffer = Buffer.from(media.data, "base64");
                 const stream = stream_1.Readable.from(buffer);
                 const fileMetadata = {

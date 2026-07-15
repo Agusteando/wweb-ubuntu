@@ -36,6 +36,7 @@ const axios_1 = __importDefault(require("axios"));
 const form_data_1 = __importDefault(require("form-data"));
 const PDFServicesSdk = __importStar(require("@adobe/pdfservices-node-sdk"));
 const tmp_1 = __importDefault(require("tmp"));
+const QuotedMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/QuotedMessage");
 async function getGoogleAdminAuth(scopes, subjectEmail) {
     const credPath = Env_1.default.get('GOOGLE_CREDENTIALS_PATH');
     if (!credPath) {
@@ -158,7 +159,7 @@ async function withRetry(fn, retries, delayMs) {
     throw new Error('Unreachable');
 }
 async function createAudioPrediction2(message) {
-    const media = await message.downloadMedia();
+    const media = await (0, QuotedMessage_1.downloadMessageMediaSafely)(message, 'AudioTranscriptionAutomation');
     if (!media || !media.data)
         return null;
     return new Promise((resolve, reject) => {

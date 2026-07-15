@@ -3,7 +3,7 @@ import { UserSession } from 'App/Services/SessionManager'
 import { getGoogleAdminAuth } from 'App/Services/Utils'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
-import { getQuotedMessageSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
 
 export default class DriveCommand {
   public type = 'Command'
@@ -257,15 +257,10 @@ export default class DriveCommand {
           return message.reply("⚠️ *Requisito:* Debes citar un mensaje tuyo o de otro usuario que contenga un archivo adjunto para usar este comando.");
         }
 
-        const quotedMsg = await getQuotedMessageSafely(message, 'DriveCommand');
-        if (!quotedMsg || !quotedMsg.hasMedia) {
-          return message.reply("⚠️ El mensaje citado no contiene ningún archivo físico o multimedia detectado.");
-        }
-
         await message.reply('⏳ Transfiriendo archivo citado a la nube de Google Drive...');
 
-        const media = await quotedMsg.downloadMedia();
-        if (!media) return message.reply("❌ Ocurrió un error al descargar el archivo encriptado desde WhatsApp.");
+        const media = await downloadQuotedMediaSafely(message, 'DriveCommand');
+        if (!media) return message.reply("❌ No fue posible recuperar o descargar el archivo citado desde WhatsApp.");
 
         const buffer = Buffer.from(media.data, "base64");
         const stream = Readable.from(buffer);
