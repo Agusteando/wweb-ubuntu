@@ -1,6 +1,105 @@
+diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
+index 800109e..505209d 100644
+--- a/node_modules/whatsapp-web.js/src/Client.js
++++ b/node_modules/whatsapp-web.js/src/Client.js
+@@ -3314,8 +3314,8 @@ class Client extends EventEmitter {
+                         await window.WWebJS.enforceLidAndPnRetrieval(userId);
+ 
+                     return {
+-                        lid: lid?._serialized,
+-                        pn: phone?._serialized,
++                        lid: lid?._serialized ?? lid?.$1,
++                        pn: phone?._serialized ?? phone?.$1,
+                     };
+                 }),
+             );
+diff --git a/node_modules/whatsapp-web.js/src/structures/Message.js b/node_modules/whatsapp-web.js/src/structures/Message.js
+index dd977e8..8dd61f9 100644
 --- a/node_modules/whatsapp-web.js/src/structures/Message.js
 +++ b/node_modules/whatsapp-web.js/src/structures/Message.js
-@@ -431,20 +431,51 @@
+@@ -10,6 +10,31 @@ const Contact = require('./Contact');
+ const ScheduledEvent = require('./ScheduledEvent'); // eslint-disable-line no-unused-vars
+ const { MessageTypes } = require('../util/Constants');
+ 
++function getSerializedId(value) {
++    if (!value) return undefined;
++    if (typeof value === 'string') return value;
++    return value._serialized ?? value.$1;
++}
++
++function normalizeSerializedFields(value, depth = 0) {
++    if (!value || typeof value !== 'object' || depth > 8) return value;
++
++    if (Array.isArray(value)) {
++        for (const item of value) normalizeSerializedFields(item, depth + 1);
++        return value;
++    }
++
++    if (value.$1 !== undefined && value._serialized === undefined) {
++        value._serialized = value.$1;
++    }
++
++    for (const key of Object.keys(value)) {
++        normalizeSerializedFields(value[key], depth + 1);
++    }
++
++    return value;
++}
++
+ /**
+  * Represents a Message on WhatsApp
+  * @extends {Base}
+@@ -22,6 +47,7 @@ class Message extends Base {
+     }
+ 
+     _patch(data) {
++        normalizeSerializedFields(data);
+         this._data = data;
+ 
+         /**
+@@ -74,7 +100,7 @@ class Message extends Base {
+          */
+         this.from =
+             typeof data.from === 'object' && data.from !== null
+-                ? data.from._serialized
++                ? data.from._serialized ?? data.from.$1
+                 : data.from;
+ 
+         /**
+@@ -86,7 +112,7 @@ class Message extends Base {
+          */
+         this.to =
+             typeof data.to === 'object' && data.to !== null
+-                ? data.to._serialized
++                ? data.to._serialized ?? data.to.$1
+                 : data.to;
+ 
+         /**
+@@ -95,7 +121,7 @@ class Message extends Base {
+          */
+         this.author =
+             typeof data.author === 'object' && data.author !== null
+-                ? data.author._serialized
++                ? data.author._serialized ?? data.author.$1
+                 : data.author;
+ 
+         /**
+@@ -211,12 +237,12 @@ class Message extends Base {
+                       fromId:
+                           typeof data.from === 'object' &&
+                           '_serialized' in data.from
+-                              ? data.from._serialized
++                              ? data.from._serialized ?? data.from.$1
+                               : data.from,
+                       toId:
+                           typeof data.to === 'object' &&
+                           '_serialized' in data.to
+-                              ? data.to._serialized
++                              ? data.to._serialized ?? data.to.$1
+                               : data.to,
+                   }
+                 : undefined;
+@@ -431,20 +457,53 @@ class Message extends Base {
      async getQuotedMessage() {
          if (!this.hasQuotedMsg) return undefined;
  
@@ -17,11 +116,13 @@
 -                .getQuotedMsgObj(msg);
 -            return window.WWebJS.getMessageModel(quotedMsg);
 -        }, this.id._serialized);
++        const messageId = getSerializedId(this.id);
 +        const quotedMessageId =
-+            this._data?.quotedMsg?.id?._serialized ||
-+            this._data?.quotedMsg?.id ||
-+            this._data?.quotedMsgId;
- 
++            getSerializedId(this._data?.quotedMsg?.id) ||
++            getSerializedId(this._data?.quotedMsgId);
++
++        if (!messageId) return undefined;
++
 +        const quotedMsg = await this.client.pupPage.evaluate(
 +            async ({ msgId, quotedMessageId }) => {
 +                try {
@@ -34,7 +135,7 @@
 +                            (await messages.getMessagesById([quotedMessageId]))
 +                                ?.messages?.[0];
 +                    }
-+
+ 
 +                    if (!quotedMsg) {
 +                        const msg =
 +                            messages.get(msgId) ||
@@ -58,16 +159,244 @@
 +                    return null;
 +                }
 +            },
-+            { msgId: this.id._serialized, quotedMessageId },
++            { msgId: messageId, quotedMessageId },
 +        );
 +
 +        if (!quotedMsg) return undefined;
          return new Message(this.client, quotedMsg);
      }
  
+@@ -511,81 +570,122 @@ class Message extends Base {
+      * @returns {Promise<MessageMedia>}
+      */
+     async downloadMedia() {
+-        if (!this.hasMedia) {
+-            return undefined;
+-        }
++        if (!this.hasMedia) return undefined;
++
++        const messageId = getSerializedId(this.id);
++        if (!messageId) return undefined;
+ 
+         const result = await this.client.pupPage.evaluate(async (msgId) => {
+-            const msg =
+-                window.require('WAWebCollections').Msg.get(msgId) ||
+-                (
+-                    await window
+-                        .require('WAWebCollections')
+-                        .Msg.getMessagesById([msgId])
+-                )?.messages?.[0];
++            try {
++                const messages = window.require('WAWebCollections').Msg;
++                const msg =
++                    messages.get(msgId) ||
++                    (await messages.getMessagesById([msgId]))?.messages?.[0];
++
++                if (
++                    !msg ||
++                    !msg.mediaData ||
++                    msg.mediaData.mediaStage === 'REUPLOADING'
++                ) {
++                    return null;
++                }
+ 
+-            // REUPLOADING mediaStage means the media is expired and the download button is spinning, cannot be downloaded now
+-            if (
+-                !msg ||
+-                !msg.mediaData ||
+-                msg.mediaData.mediaStage === 'REUPLOADING'
+-            ) {
+-                return null;
+-            }
+-            if (msg.mediaData.mediaStage != 'RESOLVED') {
+-                // try to resolve media
+-                await msg.downloadMedia({
+-                    downloadEvenIfExpensive: true,
+-                    rmrReason: 1,
+-                });
+-            }
++                if (msg.mediaData.mediaStage !== 'RESOLVED') {
++                    try {
++                        await msg.downloadMedia({
++                            downloadEvenIfExpensive: true,
++                            rmrReason: 1,
++                            isUserInitiated: true,
++                        });
++                    } catch (_error) {
++                        // New WhatsApp Web builds may throw a minified `r`
++                        // while still leaving enough metadata to use the
++                        // cache or DownloadManager fallback below.
++                    }
++                }
+ 
+-            if (
+-                msg.mediaData.mediaStage.includes('ERROR') ||
+-                msg.mediaData.mediaStage === 'FETCHING'
+-            ) {
+-                // media could not be downloaded
+-                return undefined;
+-            }
++                const expectedSize = Number(msg.size) || 0;
++                let blob;
+ 
+-            try {
+-                const mockQpl = {
+-                    addAnnotations: function () {
+-                        return this;
+-                    },
+-                    addPoint: function () {
+-                        return this;
+-                    },
+-                };
+-                const decryptedMedia = await window
+-                    .require('WAWebDownloadManager')
+-                    .downloadManager.downloadAndMaybeDecrypt({
+-                        directPath: msg.directPath,
+-                        encFilehash: msg.encFilehash,
+-                        filehash: msg.filehash,
+-                        mediaKey: msg.mediaKey,
+-                        mediaKeyTimestamp: msg.mediaKeyTimestamp,
+-                        type: msg.type,
+-                        signal: new AbortController().signal,
+-                        downloadQpl: mockQpl,
+-                    });
+-
+-                const data =
+-                    await window.WWebJS.arrayBufferToBase64Async(
+-                        decryptedMedia,
++                try {
++                    const mediaCache = window.require(
++                        'WAWebMediaInMemoryBlobCache',
++                    );
++                    blob = mediaCache?.InMemoryMediaBlobCache?.get(
++                        msg.mediaObject?.filehash,
+                     );
++                    if (blob?.forceToBlob) blob = blob.forceToBlob();
++                } catch (_error) {
++                    blob = undefined;
++                }
+ 
+-                return {
+-                    data,
+-                    mimetype: msg.mimetype,
+-                    filename: msg.filename,
+-                    filesize: msg.size,
+-                };
+-            } catch (e) {
+-                if (e.status && e.status === 404) return undefined;
+-                throw e;
++                if (!blob && msg.mediaObject?.mediaBlob?.forceToBlob) {
++                    try {
++                        blob = msg.mediaObject.mediaBlob.forceToBlob();
++                    } catch (_error) {
++                        blob = undefined;
++                    }
++                }
++
++                const blobLooksComplete =
++                    blob?.arrayBuffer &&
++                    (expectedSize <= 0 || blob.size >= expectedSize * 0.5);
++
++                if (blobLooksComplete) {
++                    return {
++                        data: await window.WWebJS.arrayBufferToBase64Async(
++                            await blob.arrayBuffer(),
++                        ),
++                        mimetype: msg.mimetype,
++                        filename: msg.filename,
++                        filesize: msg.size,
++                    };
++                }
++
++                try {
++                    const mockQpl = {
++                        addAnnotations: function () {
++                            return this;
++                        },
++                        addPoint: function () {
++                            return this;
++                        },
++                    };
++                    const downloadManager = window.require(
++                        'WAWebDownloadManager',
++                    )?.downloadManager;
++                    if (!downloadManager?.downloadAndMaybeDecrypt) return null;
++
++                    const decryptedMedia =
++                        await downloadManager.downloadAndMaybeDecrypt({
++                            directPath: msg.directPath,
++                            encFilehash: msg.encFilehash,
++                            filehash: msg.filehash,
++                            mediaKey: msg.mediaKey,
++                            mediaKeyTimestamp: msg.mediaKeyTimestamp,
++                            type: msg.type,
++                            signal: new AbortController().signal,
++                            downloadQpl: mockQpl,
++                        });
++
++                    if (!decryptedMedia) return null;
++
++                    return {
++                        data: await window.WWebJS.arrayBufferToBase64Async(
++                            decryptedMedia,
++                        ),
++                        mimetype: msg.mimetype,
++                        filename: msg.filename,
++                        filesize: msg.size,
++                    };
++                } catch (error) {
++                    if (error?.status === 404) return null;
++                    return null;
++                }
++            } catch (_error) {
++                return null;
+             }
+-        }, this.id._serialized);
++        }, messageId);
+ 
+         if (!result) return undefined;
+         return new MessageMedia(
+diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
+index 540078a..847b832 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 +++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-@@ -548,7 +548,7 @@
+@@ -3,6 +3,35 @@
+ exports.LoadUtils = () => {
+     window.WWebJS = {};
+ 
++    window.WWebJS.widSerialized = (wid) => {
++        if (!wid || typeof wid === 'string') return wid;
++        return (
++            wid._serialized ??
++            wid.$1 ??
++            (typeof wid.toString === 'function' ? wid.toString() : undefined)
++        );
++    };
++
++    window.WWebJS.normalizeSerialized = (obj, depth = 0) => {
++        if (!obj || typeof obj !== 'object' || depth > 8) return obj;
++        if (Array.isArray(obj)) {
++            for (const item of obj) {
++                window.WWebJS.normalizeSerialized(item, depth + 1);
++            }
++            return obj;
++        }
++        if (obj.$1 !== undefined && obj._serialized === undefined) {
++            obj._serialized = obj.$1;
++        }
++        for (const key of Object.keys(obj)) {
++            const value = obj[key];
++            if (value && typeof value === 'object') {
++                window.WWebJS.normalizeSerialized(value, depth + 1);
++            }
++        }
++        return obj;
++    };
++
+     /**
+      * Helper function that compares between two WWeb versions. Its purpose is to help the developer to choose the correct code implementation depending on the comparison value and the WWeb version.
+      * @param {string} lOperand The left operand for the WWeb version string to compare with
+@@ -548,7 +577,7 @@ exports.LoadUtils = () => {
                      ),
                      cannotBeRanked: window
                          .require('WAWebStatusGatingUtils')
@@ -76,3 +405,118 @@
                  },
              );
  
+@@ -576,13 +605,36 @@ exports.LoadUtils = () => {
+         const [msgPromise, sendMsgResultPromise] = window
+             .require('WAWebSendMsgChatAction')
+             .addAndSendMsgToChat(chat, message);
+-        await msgPromise;
++        const createdMessage = await msgPromise;
++
++        let sendResult;
++        if (options.waitUntilMsgSent) sendResult = await sendMsgResultPromise;
++
++        const messageId = window.WWebJS.widSerialized(newMsgKey);
++        const messageCollection = window.require('WAWebCollections').Msg;
++        let sentMessage = messageId ? messageCollection.get(messageId) : null;
++
++        if (!sentMessage && createdMessage?.serialize) {
++            sentMessage = createdMessage;
++        } else if (!sentMessage && createdMessage?.msg?.serialize) {
++            sentMessage = createdMessage.msg;
++        } else if (!sentMessage && sendResult?.serialize) {
++            sentMessage = sendResult;
++        } else if (!sentMessage && sendResult?.msg?.serialize) {
++            sentMessage = sendResult.msg;
++        }
+ 
+-        if (options.waitUntilMsgSent) await sendMsgResultPromise;
++        if (!sentMessage && messageId) {
++            try {
++                sentMessage = (
++                    await messageCollection.getMessagesById([messageId])
++                )?.messages?.[0];
++            } catch (_error) {
++                sentMessage = null;
++            }
++        }
+ 
+-        return window
+-            .require('WAWebCollections')
+-            .Msg.get(newMsgKey._serialized);
++        return sentMessage || null;
+     };
+ 
+     window.WWebJS.editMessage = async (msg, content, options = {}) => {
+@@ -830,13 +882,13 @@ exports.LoadUtils = () => {
+ 
+         if (typeof msg.id.remote === 'object') {
+             msg.id = Object.assign({}, msg.id, {
+-                remote: msg.id.remote._serialized,
++                remote: window.WWebJS.widSerialized(msg.id.remote),
+             });
+         }
+ 
+         delete msg.pendingAckUpdate;
+ 
+-        return msg;
++        return window.WWebJS.normalizeSerialized(msg);
+     };
+ 
+     window.WWebJS.getChat = async (chatId, { getAsModel = true } = {}) => {
+@@ -953,7 +1005,7 @@ exports.LoadUtils = () => {
+             model.isGroup = true;
+             const chatWid = window
+                 .require('WAWebWidFactory')
+-                .createWid(chat.id._serialized);
++                .createWid(window.WWebJS.widSerialized(chat.id));
+             const groupMetadata =
+                 window.require('WAWebCollections').GroupMetadata ||
+                 window.require('WAWebCollections').WAWebGroupMetadataCollection;
+@@ -981,28 +1033,31 @@ exports.LoadUtils = () => {
+ 
+         model.lastMessage = null;
+         if (model.msgs && model.msgs.length) {
+-            const lastMessage = chat.lastReceivedKey
+-                ? window
+-                      .require('WAWebCollections')
+-                      .Msg.get(chat.lastReceivedKey._serialized) ||
+-                  (
+-                      await window
+-                          .require('WAWebCollections')
+-                          .Msg.getMessagesById([
+-                              chat.lastReceivedKey._serialized,
+-                          ])
+-                  )?.messages?.[0]
+-                : null;
+-            lastMessage &&
+-                (model.lastMessage =
+-                    window.WWebJS.getMessageModel(lastMessage));
++            try {
++                const lastKeyId = window.WWebJS.widSerialized(
++                    chat.lastReceivedKey,
++                );
++                const lastMessage = lastKeyId
++                    ? window.require('WAWebCollections').Msg.get(lastKeyId) ||
++                      (
++                          await window
++                              .require('WAWebCollections')
++                              .Msg.getMessagesById([lastKeyId])
++                      )?.messages?.[0]
++                    : null;
++                lastMessage &&
++                    (model.lastMessage =
++                        window.WWebJS.getMessageModel(lastMessage));
++            } catch (_error) {
++                model.lastMessage = null;
++            }
+         }
+ 
+         delete model.msgs;
+         delete model.msgUnsyncedButtonReplyMsgs;
+         delete model.unsyncedButtonReplies;
+ 
+-        return model;
++        return window.WWebJS.normalizeSerialized(model);
+     };
+ 
+     window.WWebJS.getContactModel = (contact) => {

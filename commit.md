@@ -1,1 +1,1 @@
-Corrige la resolución y descarga de mensajes PDF citados
+Corrige compatibilidad de IDs, envíos y medios con WhatsApp Web
