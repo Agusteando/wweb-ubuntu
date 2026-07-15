@@ -1,1 +1,1 @@
-Corrige el envío de mensajes y el manejo seguro de respuestas citadas
+Corrige la resolución y descarga de mensajes PDF citados

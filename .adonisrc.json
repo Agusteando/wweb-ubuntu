@@ -22,8 +22,20 @@
     "./providers/BotServiceProvider"
   ],
   "metaFiles": [
-    { "pattern": "resources/views/**/*.edge", "reloadServer": false },
-    { "pattern": "resources/js/**", "reloadServer": false }
+    {
+      "pattern": "resources/views/**/*.edge",
+      "reloadServer": false
+    },
+    {
+      "pattern": "resources/js/**",
+      "reloadServer": false
+    },
+    {
+      "pattern": "patches/**/*.patch",
+      "reloadServer": false
+    }
   ],
-  "aceProviders": ["@adonisjs/repl"]
+  "aceProviders": [
+    "@adonisjs/repl"
+  ]
 }

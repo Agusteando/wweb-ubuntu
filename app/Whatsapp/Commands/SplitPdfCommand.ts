@@ -31,16 +31,38 @@ export default class SplitPdfCommand {
     }
 
     const quotedMsg = await getQuotedMessageSafely(message, 'SplitPdfCommand')
-    if (!quotedMsg || !quotedMsg.hasMedia) {
-      await message.reply('Por favor, cite un archivo PDF.')
+    if (!quotedMsg) {
+      await message.reply(
+        'No fue posible recuperar el mensaje citado. Reenvíe el PDF al chat y responda directamente al nuevo mensaje con el comando !split.'
+      )
       return
     }
 
-    const media = await quotedMsg.downloadMedia()
-    if (!media || media.mimetype !== 'application/pdf') {
+    if (!quotedMsg.hasMedia) {
+      await message.reply('El mensaje citado no contiene un archivo. Por favor, cite un PDF.')
+      return
+    }
+
+    let media: MessageMedia | undefined
+    try {
+      media = await quotedMsg.downloadMedia()
+    } catch (error) {
+      console.warn('[SplitPdfCommand] Unable to download quoted media', error)
+    }
+
+    if (!media) {
+      await message.reply(
+        'El archivo citado ya no está disponible para descarga. Reenvíe el PDF y vuelva a ejecutar el comando.'
+      )
+      return
+    }
+
+    if (media.mimetype !== 'application/pdf') {
       await message.reply('Formato de archivo no soportado. Por favor, cite un archivo PDF.')
       return
     }
+
+    const pdfMedia = media
 
     const credentials = PDFServicesSdk.Credentials.servicePrincipalCredentialsBuilder()
       .withClientId(clientId)
@@ -57,7 +79,7 @@ export default class SplitPdfCommand {
 
         try {
           const inputPath = path.join(dirPath, 'input.pdf')
-          await fs.writeFile(inputPath, media.data, 'base64')
+          await fs.writeFile(inputPath, pdfMedia.data, 'base64')
 
           const splitOperation = PDFServicesSdk.SplitPDF.Operation.createNew()
           const input = PDFServicesSdk.FileRef.createFromLocalFile(inputPath)
