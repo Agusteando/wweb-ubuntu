@@ -6,12 +6,13 @@ import tmp from 'tmp'
 import Env from '@ioc:Adonis/Core/Env'
 import * as PDFServicesSdk from '@adobe/pdfservices-node-sdk'
 import { downloadQuotedMediaSafely } from 'App/Whatsapp/Utils/QuotedMessage'
+import { requireSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
 
 export default class SplitPdfCommand {
   public type = 'Command'
   public instructions = '!split <1,3-5> (Responda a un PDF) - Divide el PDF en los rangos especificados.'
 
-  async handle(message: Message, _client: Client, _session: UserSession) {
+  async handle(message: Message, client: Client, _session: UserSession) {
     const body = message.body || ''
     const cmd = body.split(' ')[0].toLowerCase()
 
@@ -94,9 +95,24 @@ export default class SplitPdfCommand {
 
           const outputPaths = await Promise.all(filesPromises)
 
-          for (const outputPath of outputPaths) {
+          const destination = message.fromMe ? message.to : message.from
+          if (!destination) throw new Error('Unable to determine the destination chat for the split PDF.')
+
+          console.info(`[SplitPdfCommand] PDF processing completed. Sending ${outputPaths.length} output file(s) to ${destination}.`)
+
+          for (let index = 0; index < outputPaths.length; index += 1) {
+            const outputPath = outputPaths[index]
+            const filename = `split_${index + 1}_of_${outputPaths.length}.pdf`
             const splitPdfMessage = await MessageMedia.fromFilePath(outputPath)
-            await message.reply(splitPdfMessage)
+            splitPdfMessage.filename = filename
+
+            const sentMessage = await client.sendMessage(destination, splitPdfMessage, {
+              sendMediaAsDocument: true,
+              waitUntilMsgSent: true,
+              sendSeen: false,
+            })
+            const metadata = requireSentMessageMetadata(sentMessage, destination)
+            console.info(`[SplitPdfCommand] Delivered ${filename} to ${destination} as ${metadata.id}.`)
           }
         } catch (error) {
           console.error('Exception encountered while executing operation', error)

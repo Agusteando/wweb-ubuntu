@@ -27,6 +27,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const whatsapp_web_js_1 = require("whatsapp-web.js");
+const ReliableClientSend_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/ReliableClientSend");
 const path_1 = __importDefault(require("path"));
 const CommandRegistry_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Services/CommandRegistry"));
 const Env_1 = __importDefault(global[Symbol.for('ioc.use')]("Adonis/Core/Env"));
@@ -490,6 +491,7 @@ class BotService {
                 ]
             },
         });
+        (0, ReliableClientSend_1.installReliableClientSend)(client, clientId);
         this.clients.set(clientId, client);
         this.qrCodes.set(clientId, null);
         this.setRuntimeState(clientId, 'initializing', 'initializing');

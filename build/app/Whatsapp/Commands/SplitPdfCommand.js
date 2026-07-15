@@ -33,12 +33,13 @@ const tmp_1 = __importDefault(require("tmp"));
 const Env_1 = __importDefault(global[Symbol.for('ioc.use')]("Adonis/Core/Env"));
 const PDFServicesSdk = __importStar(require("@adobe/pdfservices-node-sdk"));
 const QuotedMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/QuotedMessage");
+const SentMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/SentMessage");
 class SplitPdfCommand {
     constructor() {
         this.type = 'Command';
         this.instructions = '!split <1,3-5> (Responda a un PDF) - Divide el PDF en los rangos especificados.';
     }
-    async handle(message, _client, _session) {
+    async handle(message, client, _session) {
         const body = message.body || '';
         const cmd = body.split(' ')[0].toLowerCase();
         if (cmd !== '!split')
@@ -104,9 +105,22 @@ class SplitPdfCommand {
                         filesPromises.push(result[i].saveAsFile(outputPath).then(() => outputPath));
                     }
                     const outputPaths = await Promise.all(filesPromises);
-                    for (const outputPath of outputPaths) {
+                    const destination = message.fromMe ? message.to : message.from;
+                    if (!destination)
+                        throw new Error('Unable to determine the destination chat for the split PDF.');
+                    console.info(`[SplitPdfCommand] PDF processing completed. Sending ${outputPaths.length} output file(s) to ${destination}.`);
+                    for (let index = 0; index < outputPaths.length; index += 1) {
+                        const outputPath = outputPaths[index];
+                        const filename = `split_${index + 1}_of_${outputPaths.length}.pdf`;
                         const splitPdfMessage = await whatsapp_web_js_1.MessageMedia.fromFilePath(outputPath);
-                        await message.reply(splitPdfMessage);
+                        splitPdfMessage.filename = filename;
+                        const sentMessage = await client.sendMessage(destination, splitPdfMessage, {
+                            sendMediaAsDocument: true,
+                            waitUntilMsgSent: true,
+                            sendSeen: false,
+                        });
+                        const metadata = (0, SentMessage_1.requireSentMessageMetadata)(sentMessage, destination);
+                        console.info(`[SplitPdfCommand] Delivered ${filename} to ${destination} as ${metadata.id}.`);
                     }
                 }
                 catch (error) {
