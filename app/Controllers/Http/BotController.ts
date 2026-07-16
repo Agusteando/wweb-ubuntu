@@ -6,7 +6,7 @@ import CommandRegistry from 'App/Services/CommandRegistry'
 import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
-import { getSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
+import { getSentMessageId, getSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
 import { resolveCanonicalChatId } from 'App/Whatsapp/Utils/ChatId'
 
 type DispatchResult = {
@@ -792,12 +792,23 @@ export default class BotController {
       if (!msg) return response.status(404).json({ status: 'error', error: 'Message not found' });
       if (!msg.fromMe) return response.status(400).json({ status: 'error', error: 'Only messages sent by this WhatsApp client can be edited' });
 
-      const stableMessageId = getSentMessageMetadata(msg, msg.to || msg.from || 'unknown').id || messageId;
+      const stableMessageId = getSentMessageId(msg) || messageId;
       const currentBody = typeof msg.body === 'string' ? msg.body : '';
       const duplicateEdit = currentBody === content;
       const edited = duplicateEdit ? msg : await msg.edit(content, options);
-      const resultMessage = edited || msg;
-      const metadata = getSentMessageMetadata(resultMessage, resultMessage.to || resultMessage.from || 'unknown');
+
+      if (!edited) {
+        return response.status(409).json({
+          status: 'error',
+          success: false,
+          error: 'WhatsApp did not accept this message for editing. No new message was sent.',
+          messageId: stableMessageId,
+          retriesPerformed: 0,
+        });
+      }
+
+      const resultMessage = edited;
+      const editedMessageId = getSentMessageId(resultMessage) || stableMessageId;
 
       this.botService.logApi({
         clientId,
@@ -818,7 +829,7 @@ export default class BotController {
         changed: !duplicateEdit,
         editState: duplicateEdit ? 'unchanged' : 'confirmed',
         message: {
-          id: metadata.id || stableMessageId,
+          id: editedMessageId,
           chatId: resultMessage.to || resultMessage.from,
           timestamp: resultMessage.timestamp,
         },

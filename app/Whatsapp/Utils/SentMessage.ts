@@ -5,6 +5,9 @@ export type SentMessageMetadata = {
 }
 
 export function getSentMessageId(result: any): string | null {
+  const explicitId = result?.generatedMessageId ?? result?._data?.generatedMessageId
+  if (typeof explicitId === 'string' && explicitId.trim()) return explicitId
+
   const rawId = result?.id
 
   if (typeof rawId === 'string' && rawId.trim()) return rawId

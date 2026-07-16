@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireSentMessageMetadata = exports.getSentMessageMetadata = exports.getSentMessageId = void 0;
 function getSentMessageId(result) {
+    const explicitId = result?.generatedMessageId ?? result?._data?.generatedMessageId;
+    if (typeof explicitId === 'string' && explicitId.trim())
+        return explicitId;
     const rawId = result?.id;
     if (typeof rawId === 'string' && rawId.trim())
         return rawId;

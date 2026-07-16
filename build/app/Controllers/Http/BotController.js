@@ -740,12 +740,21 @@ class BotController {
                 return response.status(404).json({ status: 'error', error: 'Message not found' });
             if (!msg.fromMe)
                 return response.status(400).json({ status: 'error', error: 'Only messages sent by this WhatsApp client can be edited' });
-            const stableMessageId = (0, SentMessage_1.getSentMessageMetadata)(msg, msg.to || msg.from || 'unknown').id || messageId;
+            const stableMessageId = (0, SentMessage_1.getSentMessageId)(msg) || messageId;
             const currentBody = typeof msg.body === 'string' ? msg.body : '';
             const duplicateEdit = currentBody === content;
             const edited = duplicateEdit ? msg : await msg.edit(content, options);
-            const resultMessage = edited || msg;
-            const metadata = (0, SentMessage_1.getSentMessageMetadata)(resultMessage, resultMessage.to || resultMessage.from || 'unknown');
+            if (!edited) {
+                return response.status(409).json({
+                    status: 'error',
+                    success: false,
+                    error: 'WhatsApp did not accept this message for editing. No new message was sent.',
+                    messageId: stableMessageId,
+                    retriesPerformed: 0,
+                });
+            }
+            const resultMessage = edited;
+            const editedMessageId = (0, SentMessage_1.getSentMessageId)(resultMessage) || stableMessageId;
             this.botService.logApi({
                 clientId,
                 endpoint: request.url(),
@@ -764,7 +773,7 @@ class BotController {
                 changed: !duplicateEdit,
                 editState: duplicateEdit ? 'unchanged' : 'confirmed',
                 message: {
-                    id: metadata.id || stableMessageId,
+                    id: editedMessageId,
                     chatId: resultMessage.to || resultMessage.from,
                     timestamp: resultMessage.timestamp,
                 },

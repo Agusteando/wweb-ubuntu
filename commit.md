@@ -1,1 +1,1 @@
-Corrige el bucle de reenvío restaurando IDs estables en envíos y ediciones
+Restaura IDs estables para enviar y editar mensajes sin reintentos
