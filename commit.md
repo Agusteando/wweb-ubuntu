@@ -1,1 +1,1 @@
-Garantiza la entrega verificable de mensajes y archivos PDF en WhatsApp
+Resuelve destinatarios LID al JID telefónico antes de enviar archivos

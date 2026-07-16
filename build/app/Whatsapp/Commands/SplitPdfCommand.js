@@ -34,33 +34,34 @@ const Env_1 = __importDefault(global[Symbol.for('ioc.use')]("Adonis/Core/Env"));
 const PDFServicesSdk = __importStar(require("@adobe/pdfservices-node-sdk"));
 const QuotedMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/QuotedMessage");
 const SentMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/SentMessage");
+const ChatId_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/ChatId");
 class SplitPdfCommand {
     constructor() {
-        this.type = 'Command';
-        this.instructions = '!split <1,3-5> (Responda a un PDF) - Divide el PDF en los rangos especificados.';
+        this.type = "Command";
+        this.instructions = "!split <1,3-5> (Responda a un PDF) - Divide el PDF en los rangos especificados.";
     }
     async handle(message, client, _session) {
-        const body = message.body || '';
-        const cmd = body.split(' ')[0].toLowerCase();
-        if (cmd !== '!split')
+        const body = message.body || "";
+        const cmd = body.split(" ")[0].toLowerCase();
+        if (cmd !== "!split")
             return;
-        const clientId = Env_1.default.get('ADOBE_CLIENT_ID');
-        const clientSecret = Env_1.default.get('ADOBE_CLIENT_SECRET');
+        const clientId = Env_1.default.get("ADOBE_CLIENT_ID");
+        const clientSecret = Env_1.default.get("ADOBE_CLIENT_SECRET");
         if (!clientId || !clientSecret) {
-            await message.reply('Error del sistema: Las credenciales de Adobe PDF no están configuradas.');
+            await message.reply("Error del sistema: Las credenciales de Adobe PDF no están configuradas.");
             return;
         }
         if (!message.hasQuotedMsg) {
-            await message.reply('Por favor, cite un archivo PDF.');
+            await message.reply("Por favor, cite un archivo PDF.");
             return;
         }
-        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, 'SplitPdfCommand');
+        const media = await (0, QuotedMessage_1.downloadQuotedMediaSafely)(message, "SplitPdfCommand");
         if (!media) {
-            await message.reply('El archivo citado ya no está disponible para descarga. Reenvíe el PDF y vuelva a ejecutar el comando.');
+            await message.reply("El archivo citado ya no está disponible para descarga. Reenvíe el PDF y vuelva a ejecutar el comando.");
             return;
         }
-        if (media.mimetype !== 'application/pdf') {
-            await message.reply('Formato de archivo no soportado. Por favor, cite un archivo PDF.');
+        if (media.mimetype !== "application/pdf") {
+            await message.reply("Formato de archivo no soportado. Por favor, cite un archivo PDF.");
             return;
         }
         const pdfMedia = media;
@@ -72,24 +73,24 @@ class SplitPdfCommand {
         await new Promise((resolve) => {
             tmp_1.default.dir({ unsafeCleanup: true }, async (err, dirPath, cleanupCallback) => {
                 if (err) {
-                    await message.reply('Ocurrió un error al preparar el entorno de procesamiento.');
+                    await message.reply("Ocurrió un error al preparar el entorno de procesamiento.");
                     return resolve();
                 }
                 try {
-                    const inputPath = path_1.default.join(dirPath, 'input.pdf');
-                    await fs_1.promises.writeFile(inputPath, pdfMedia.data, 'base64');
+                    const inputPath = path_1.default.join(dirPath, "input.pdf");
+                    await fs_1.promises.writeFile(inputPath, pdfMedia.data, "base64");
                     const splitOperation = PDFServicesSdk.SplitPDF.Operation.createNew();
                     const input = PDFServicesSdk.FileRef.createFromLocalFile(inputPath);
                     splitOperation.setInput(input);
                     const pageRanges = new PDFServicesSdk.PageRanges();
-                    const inlineText = body.replace(cmd, '').trim();
+                    const inlineText = body.replace(cmd, "").trim();
                     const ranges = inlineText.split(",");
                     if (ranges.length === 0 || !ranges[0]) {
-                        await message.reply('Por favor, especifique un rango de páginas válido. Ejemplo: !split 1,3-5');
+                        await message.reply("Por favor, especifique un rango de páginas válido. Ejemplo: !split 1,3-5");
                         return resolve();
                     }
-                    ranges.forEach(range => {
-                        const [start, end] = range.split('-');
+                    ranges.forEach((range) => {
+                        const [start, end] = range.split("-");
                         if (end) {
                             pageRanges.addPageRange(parseInt(start, 10), parseInt(end, 10));
                         }
@@ -105,10 +106,13 @@ class SplitPdfCommand {
                         filesPromises.push(result[i].saveAsFile(outputPath).then(() => outputPath));
                     }
                     const outputPaths = await Promise.all(filesPromises);
-                    const destination = message.fromMe ? message.to : message.from;
-                    if (!destination)
-                        throw new Error('Unable to determine the destination chat for the split PDF.');
-                    console.info(`[SplitPdfCommand] PDF processing completed. Sending ${outputPaths.length} output file(s) to ${destination}.`);
+                    const sourceDestination = message.fromMe
+                        ? message.to
+                        : message.from;
+                    const destination = await (0, ChatId_1.resolveMessageDestination)(message, client);
+                    console.info(`[SplitPdfCommand] PDF processing completed. Sending ${outputPaths.length} output file(s) to ${destination}${sourceDestination && sourceDestination !== destination
+                        ? ` (resolved from ${sourceDestination})`
+                        : ""}.`);
                     for (let index = 0; index < outputPaths.length; index += 1) {
                         const outputPath = outputPaths[index];
                         const filename = `split_${index + 1}_of_${outputPaths.length}.pdf`;
@@ -124,8 +128,8 @@ class SplitPdfCommand {
                     }
                 }
                 catch (error) {
-                    console.error('Exception encountered while executing operation', error);
-                    await message.reply('Ocurrió un error al dividir el archivo PDF. Por favor, intente nuevamente.');
+                    console.error("Exception encountered while executing operation", error);
+                    await message.reply("Ocurrió un error al dividir el archivo PDF. Por favor, intente nuevamente.");
                 }
                 finally {
                     cleanupCallback();

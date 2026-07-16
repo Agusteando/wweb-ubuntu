@@ -3,29 +3,31 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.installReliableClientSend = void 0;
 const whatsapp_web_js_1 = require("whatsapp-web.js");
 const SentMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/SentMessage");
+const ChatId_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/ChatId");
 const installedClients = new WeakSet();
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 function buildSignature(content, options) {
-    if (typeof content === 'string') {
+    if (typeof content === "string") {
         return {
-            kind: options?.media ? 'media' : 'text',
+            kind: options?.media ? "media" : "text",
             body: options?.media ? undefined : content,
-            caption: typeof options?.caption === 'string' ? options.caption : undefined,
+            caption: typeof options?.caption === "string" ? options.caption : undefined,
             mimetype: options?.media?.mimetype,
             filename: options?.media?.filename,
         };
     }
-    if (content instanceof whatsapp_web_js_1.MessageMedia || (content && typeof content === 'object' && content.data && content.mimetype)) {
+    if (content instanceof whatsapp_web_js_1.MessageMedia ||
+        (content && typeof content === "object" && content.data && content.mimetype)) {
         return {
-            kind: 'media',
-            caption: typeof options?.caption === 'string' ? options.caption : undefined,
+            kind: "media",
+            caption: typeof options?.caption === "string" ? options.caption : undefined,
             mimetype: content.mimetype,
             filename: content.filename || undefined,
         };
     }
-    return { kind: 'other' };
+    return { kind: "other" };
 }
 async function snapshotOutgoingIds(client, chatId) {
     const page = client.pupPage;
@@ -37,7 +39,7 @@ async function snapshotOutgoingIds(client, chatId) {
             const serialized = (value) => {
                 if (!value)
                     return undefined;
-                if (typeof value === 'string')
+                if (typeof value === "string")
                     return value;
                 return value._serialized ?? value.$1;
             };
@@ -46,11 +48,12 @@ async function snapshotOutgoingIds(client, chatId) {
                 if (direct)
                     return direct;
                 const remote = serialized(id?.remote);
-                const stanza = serialized(id?.id) ?? (typeof id?.id === 'string' ? id.id : undefined);
+                const stanza = serialized(id?.id) ??
+                    (typeof id?.id === "string" ? id.id : undefined);
                 if (!remote || !stanza)
                     return undefined;
                 const participant = serialized(id?.participant);
-                return `${Boolean(id?.fromMe)}_${remote}_${stanza}${participant ? `_${participant}` : ''}`;
+                return `${Boolean(id?.fromMe)}_${remote}_${stanza}${participant ? `_${participant}` : ""}`;
             };
             let chat;
             try {
@@ -83,7 +86,7 @@ async function findNewOutboundMessage(client, chatId, beforeIds, startedAt, sign
             const serialized = (value) => {
                 if (!value)
                     return undefined;
-                if (typeof value === 'string')
+                if (typeof value === "string")
                     return value;
                 return value._serialized ?? value.$1;
             };
@@ -92,14 +95,15 @@ async function findNewOutboundMessage(client, chatId, beforeIds, startedAt, sign
                 if (direct)
                     return direct;
                 const remote = serialized(id?.remote);
-                const stanza = serialized(id?.id) ?? (typeof id?.id === 'string' ? id.id : undefined);
+                const stanza = serialized(id?.id) ??
+                    (typeof id?.id === "string" ? id.id : undefined);
                 if (!remote || !stanza)
                     return undefined;
                 const participant = serialized(id?.participant);
-                return `${Boolean(id?.fromMe)}_${remote}_${stanza}${participant ? `_${participant}` : ''}`;
+                return `${Boolean(id?.fromMe)}_${remote}_${stanza}${participant ? `_${participant}` : ""}`;
             };
             const normalize = (value, depth = 0) => {
-                if (!value || typeof value !== 'object' || depth > 10)
+                if (!value || typeof value !== "object" || depth > 10)
                     return value;
                 if (Array.isArray(value)) {
                     for (const item of value)
@@ -149,21 +153,26 @@ async function findNewOutboundMessage(client, chatId, beforeIds, startedAt, sign
             let bestScore = -1;
             for (const model of candidates) {
                 const mediaData = model?.mediaData ?? model?.mediaObject ?? null;
-                const modelBody = String(model?.body ?? model?.caption ?? mediaData?.caption ?? '');
-                const modelCaption = String(model?.caption ?? mediaData?.caption ?? model?.body ?? '');
-                const modelMime = String(model?.mimetype ?? mediaData?.mimetype ?? '');
-                const modelFilename = String(model?.filename ?? mediaData?.filename ?? '');
-                const hasMedia = Boolean(model?.mediaData || model?.mediaObject || model?.type === 'document' || model?.type === 'image' || model?.type === 'video' || model?.type === 'audio');
+                const modelBody = String(model?.body ?? model?.caption ?? mediaData?.caption ?? "");
+                const modelCaption = String(model?.caption ?? mediaData?.caption ?? model?.body ?? "");
+                const modelMime = String(model?.mimetype ?? mediaData?.mimetype ?? "");
+                const modelFilename = String(model?.filename ?? mediaData?.filename ?? "");
+                const hasMedia = Boolean(model?.mediaData ||
+                    model?.mediaObject ||
+                    model?.type === "document" ||
+                    model?.type === "image" ||
+                    model?.type === "video" ||
+                    model?.type === "audio");
                 let score = Number(model?.t ?? model?.timestamp ?? 0) / 1000000000;
-                if (expected.kind === 'text') {
-                    if (modelBody === String(expected.body ?? ''))
+                if (expected.kind === "text") {
+                    if (modelBody === String(expected.body ?? ""))
                         score += 100;
                     else if (expected.body && modelBody.includes(String(expected.body)))
                         score += 50;
                     else
                         continue;
                 }
-                else if (expected.kind === 'media') {
+                else if (expected.kind === "media") {
                     if (!hasMedia)
                         continue;
                     score += 20;
@@ -206,19 +215,20 @@ async function verifyOutboundMessage(client, chatId, beforeIds, startedAt, signa
     return null;
 }
 function instantiateMessage(client, messageData) {
-    const whatsapp = require('whatsapp-web.js');
+    const whatsapp = require("whatsapp-web.js");
     const MessageCtor = whatsapp.Message;
-    if (typeof MessageCtor !== 'function')
+    if (typeof MessageCtor !== "function")
         return messageData;
     return new MessageCtor(client, messageData);
 }
-function installReliableClientSend(client, clientId = 'unknown') {
+function installReliableClientSend(client, clientId = "unknown") {
     if (installedClients.has(client))
         return;
     installedClients.add(client);
     const originalSendMessage = client.sendMessage.bind(client);
     const queues = new Map();
-    client.sendMessage = (chatId, content, options = {}) => {
+    client.sendMessage = async (requestedChatId, content, options = {}) => {
+        const chatId = await (0, ChatId_1.resolveCanonicalChatId)(client, requestedChatId);
         const previous = queues.get(chatId) ?? Promise.resolve();
         const operation = previous
             .catch(() => undefined)
@@ -239,7 +249,9 @@ function installReliableClientSend(client, clientId = 'unknown') {
             }
             const directId = (0, SentMessage_1.getSentMessageId)(result);
             if (directId) {
-                if (result?.id && typeof result.id === 'object' && !result.id._serialized) {
+                if (result?.id &&
+                    typeof result.id === "object" &&
+                    !result.id._serialized) {
                     result.id._serialized = directId;
                 }
                 return result;
@@ -247,7 +259,7 @@ function installReliableClientSend(client, clientId = 'unknown') {
             const verifiedData = await verifyOutboundMessage(client, chatId, beforeIds, startedAt, signature);
             if (verifiedData) {
                 const recoveredId = (0, SentMessage_1.getSentMessageId)(verifiedData);
-                console.warn(`[outbound:${clientId}] WhatsApp returned no message object for ${chatId}; recovered delivery confirmation from chat history${recoveredId ? ` (${recoveredId})` : ''}.`);
+                console.warn(`[outbound:${clientId}] WhatsApp returned no message object for ${chatId}; recovered delivery confirmation from chat history${recoveredId ? ` (${recoveredId})` : ""}.`);
                 return instantiateMessage(client, verifiedData);
             }
             if (sendError)
