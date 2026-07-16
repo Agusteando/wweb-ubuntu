@@ -1,5 +1,4 @@
 import { Client, LocalAuth, Message } from 'whatsapp-web.js'
-import { installReliableClientSend } from 'App/Whatsapp/Utils/ReliableClientSend'
 import path from 'path'
 import CommandRegistry from 'App/Services/CommandRegistry'
 import Env from '@ioc:Adonis/Core/Env'
@@ -622,7 +621,6 @@ export default class BotService {
       },
     })
 
-    installReliableClientSend(client, clientId)
 
     this.clients.set(clientId, client)
     this.qrCodes.set(clientId, null)

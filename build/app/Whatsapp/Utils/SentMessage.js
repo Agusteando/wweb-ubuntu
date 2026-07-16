@@ -35,14 +35,7 @@ function getSentMessageMetadata(result, destination) {
             state: 'confirmed',
         };
     }
-    if (result?.__singleAttemptReceipt === true && result?.submitted === true) {
-        return {
-            id: null,
-            timestamp: result.timestamp,
-            state: 'submitted',
-        };
-    }
-    throw new Error(`The single WhatsApp send call for ${destination} failed before it was accepted. No retry or resend was performed.`);
+    throw new Error(`WhatsApp did not return a stable message ID for ${destination}. The message was not resent.`);
 }
 exports.getSentMessageMetadata = getSentMessageMetadata;
 function requireSentMessageMetadata(result, destination) {

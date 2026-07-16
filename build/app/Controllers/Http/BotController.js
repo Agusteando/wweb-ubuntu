@@ -1,27 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -33,89 +10,13 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const whatsapp_web_js_1 = require("whatsapp-web.js");
 const SentMessage_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/SentMessage");
-const ApiSendGuard_1 = __importDefault(global[Symbol.for('ioc.use')]("App/Services/ApiSendGuard"));
-const crypto = __importStar(require("crypto"));
+const ChatId_1 = global[Symbol.for('ioc.use')]("App/Whatsapp/Utils/ChatId");
 class BotController {
     get botService() {
         return Application_1.default.container.use('App/Services/BotService');
     }
     get scheduleService() {
         return Application_1.default.container.use('App/Services/ScheduleService');
-    }
-    envMillis(name, fallback) {
-        const parsed = Number(Env_1.default.get(name));
-        return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-    }
-    secureTokenEquals(left, right) {
-        const leftBuffer = Buffer.from(left);
-        const rightBuffer = Buffer.from(right);
-        return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
-    }
-    extractApiToken(request) {
-        const authorization = request.header('authorization') || '';
-        const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
-        return String(bearerMatch?.[1] || request.header('x-api-key') || '').trim();
-    }
-    authorizeExternalWrite(request, requestedClientId) {
-        const token = this.extractApiToken(request);
-        if (!token) {
-            return {
-                authorized: false,
-                statusCode: 401,
-                message: 'A Bearer token or X-API-Key is required for outbound API operations.',
-            };
-        }
-        const globalToken = Env_1.default.get('API_SEND_TOKEN');
-        if (globalToken && this.secureTokenEquals(token, globalToken))
-            return { authorized: true };
-        if (this.botService.verifyAdminIntegrationToken(token))
-            return { authorized: true };
-        if (requestedClientId && requestedClientId.toLowerCase() !== 'any') {
-            if (this.botService.verifyIntegrationToken(requestedClientId, token))
-                return { authorized: true };
-        }
-        return {
-            authorized: false,
-            statusCode: 403,
-            message: 'The supplied API token is not authorized for this outbound operation.',
-        };
-    }
-    apiSendFingerprint(request, requestedClientId) {
-        const payload = { ...request.all() };
-        delete payload.idempotencyKey;
-        const uploadedFile = request.file('file');
-        const file = uploadedFile
-            ? {
-                name: uploadedFile.clientName,
-                size: uploadedFile.size,
-                type: uploadedFile.headers?.['content-type'],
-            }
-            : undefined;
-        const targetIds = (Array.isArray(payload.chatId) ? payload.chatId : [payload.chatId])
-            .filter((value) => value !== undefined && value !== null)
-            .map((value) => String(value).trim());
-        const uniqueTargetIds = Array.from(new Set(targetIds)).sort();
-        return {
-            requestedClientId: requestedClientId || 'any',
-            chatId: uniqueTargetIds,
-            message: payload.message,
-            caption: payload.caption,
-            filepath: payload.filepath,
-            filename: payload.filename,
-            mimetype: payload.mimetype,
-            mentions: payload.mentions,
-            options: payload.options,
-            file,
-        };
-    }
-    async dispatchMessagesGuarded(request, requestedClientId) {
-        const explicitKey = String(request.header('idempotency-key') || request.input('idempotencyKey') || '').trim();
-        const scope = `send:${requestedClientId || 'any'}`;
-        const keyData = ApiSendGuard_1.default.createKey(scope, this.apiSendFingerprint(request, requestedClientId), explicitKey);
-        const ttlMs = keyData.keyType === 'explicit'
-            ? this.envMillis('API_SEND_IDEMPOTENCY_TTL_MS', 7 * 24 * 60 * 60 * 1000)
-            : this.envMillis('API_SEND_DEDUP_WINDOW_MS', 24 * 60 * 60 * 1000);
-        return ApiSendGuard_1.default.execute(keyData.key, keyData.keyType, ttlMs, () => this.dispatchMessages(request, requestedClientId));
     }
     getIntegrationBaseUrl(request) {
         const configured = Env_1.default.get('INTEGRATION_PUBLIC_BASE_URL');
@@ -570,12 +471,14 @@ class BotController {
             const sentMessages = [];
             const failedMessages = [];
             for (let i = 0; i < chatId.length; i++) {
-                const currentChatId = chatId[i];
+                const requestedChatId = chatId[i];
                 try {
+                    const currentChatId = await (0, ChatId_1.resolveCanonicalChatId)(client, requestedChatId);
                     const result = await client.sendMessage(currentChatId, message, args);
                     const metadata = (0, SentMessage_1.getSentMessageMetadata)(result, currentChatId);
                     sentMessages.push({
                         chatId: currentChatId,
+                        requestedChatId: requestedChatId !== currentChatId ? requestedChatId : undefined,
                         id: metadata.id,
                         timestamp: metadata.timestamp,
                         state: metadata.state,
@@ -583,15 +486,14 @@ class BotController {
                 }
                 catch (sendMessageError) {
                     const errorMessage = sendMessageError?.message || String(sendMessageError);
-                    failedMessages.push({ chatId: currentChatId, error: errorMessage });
-                    console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError);
+                    failedMessages.push({ chatId: requestedChatId, error: errorMessage });
+                    console.error(`Failed to send message to chat ${requestedChatId}:`, sendMessageError);
                 }
             }
             const acceptedAny = sentMessages.length > 0;
             const success = acceptedAny && failedMessages.length === 0;
             const status = success ? 'ok' : acceptedAny ? 'partial' : 'error';
-            const confirmedCount = sentMessages.filter((item) => item.state === 'confirmed').length;
-            const submittedCount = sentMessages.filter((item) => item.state === 'submitted').length;
+            const confirmedCount = sentMessages.length;
             let summaryText = '';
             if (typeof message === 'string')
                 summaryText = message.substring(0, 100);
@@ -611,7 +513,7 @@ class BotController {
                 error: success ? undefined : failedMessages.map((failure) => `${failure.chatId}: ${failure.error}`).join('; ')
             });
             return {
-                statusCode: acceptedAny ? (submittedCount > 0 && confirmedCount === 0 ? 202 : 200) : 502,
+                statusCode: acceptedAny ? 200 : 502,
                 body: {
                     status,
                     success,
@@ -620,7 +522,7 @@ class BotController {
                     failures: failedMessages,
                     delivery: {
                         confirmed: confirmedCount,
-                        submitted: submittedCount,
+                        submitted: 0,
                         retriesPerformed: 0,
                     },
                     error: success ? undefined : acceptedAny
@@ -650,25 +552,9 @@ class BotController {
         return response.status(result.statusCode).json(result.body);
     }
     async sendMessages({ request, response, params }) {
-        const authorization = this.authorizeExternalWrite(request, params.clientId);
-        if (!authorization.authorized) {
-            return response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
-        const guarded = await this.dispatchMessagesGuarded(request, params.clientId);
-        response.header('Idempotent-Replay', guarded.replayed ? 'true' : 'false');
         response.header('X-Send-Retries', '0');
-        return response.status(guarded.result.statusCode).json({
-            ...guarded.result.body,
-            idempotency: {
-                replayed: guarded.replayed,
-                type: guarded.keyType,
-                keyExpiresAt: guarded.expiresAt,
-            },
-        });
+        const result = await this.dispatchMessages(request, params.clientId);
+        return response.status(result.statusCode).json(result.body);
     }
     async postStatusFromManager({ request, response, params }) {
         let clientId = params.clientId;
@@ -735,7 +621,7 @@ class BotController {
                     target: 'status@broadcast',
                     payloadSummary: `Text Story: ${statusText.substring(0, 100)}`
                 });
-                return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+                return response.status(200).json({
                     status: 'ok',
                     success: true,
                     clientUsed: clientId,
@@ -788,7 +674,7 @@ class BotController {
                     target: 'status@broadcast',
                     payloadSummary: `Media Story: ${caption ? caption.substring(0, 100) : file.clientName}`
                 });
-                return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+                return response.status(200).json({
                     status: 'ok',
                     success: true,
                     clientUsed: clientId,
@@ -812,14 +698,6 @@ class BotController {
         }
     }
     async postStatus(ctx) {
-        const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId);
-        if (!authorization.authorized) {
-            return ctx.response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         ctx.response.header('X-Send-Retries', '0');
         return this.postStatusFromManager(ctx);
     }
@@ -860,22 +738,36 @@ class BotController {
             const msg = await client.getMessageById(messageId);
             if (!msg)
                 return response.status(404).json({ status: 'error', error: 'Message not found' });
-            const edited = await msg.edit(content, options);
-            if (!edited)
-                return response.json({ status: 'ok', success: true, message: null });
+            if (!msg.fromMe)
+                return response.status(400).json({ status: 'error', error: 'Only messages sent by this WhatsApp client can be edited' });
+            const stableMessageId = (0, SentMessage_1.getSentMessageMetadata)(msg, msg.to || msg.from || 'unknown').id || messageId;
+            const currentBody = typeof msg.body === 'string' ? msg.body : '';
+            const duplicateEdit = currentBody === content;
+            const edited = duplicateEdit ? msg : await msg.edit(content, options);
+            const resultMessage = edited || msg;
+            const metadata = (0, SentMessage_1.getSentMessageMetadata)(resultMessage, resultMessage.to || resultMessage.from || 'unknown');
             this.botService.logApi({
                 clientId,
                 endpoint: request.url(),
                 method: request.method(),
                 status: 'success',
-                target: edited.to,
-                payloadSummary: `Edited: ${content.substring(0, 100)}`
+                target: resultMessage.to || resultMessage.from || 'unknown',
+                payloadSummary: duplicateEdit
+                    ? `Edit skipped because content is unchanged: ${content.substring(0, 100)}`
+                    : `Edited: ${content.substring(0, 100)}`
             });
+            response.header('X-Edit-Retries', '0');
             return response.json({
                 status: 'ok',
                 success: true,
                 clientUsed: clientId,
-                message: { id: edited.id?._serialized ?? edited.id, chatId: edited.to, timestamp: edited.timestamp },
+                changed: !duplicateEdit,
+                editState: duplicateEdit ? 'unchanged' : 'confirmed',
+                message: {
+                    id: metadata.id || stableMessageId,
+                    chatId: resultMessage.to || resultMessage.from,
+                    timestamp: resultMessage.timestamp,
+                },
             });
         }
         catch (error) {
@@ -892,14 +784,6 @@ class BotController {
         }
     }
     async editMessage(ctx) {
-        const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId);
-        if (!authorization.authorized) {
-            return ctx.response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         return this.editMessageFromManager(ctx);
     }
     async deleteMessageFromManager({ request, response, params }) {
@@ -971,14 +855,6 @@ class BotController {
         }
     }
     async deleteMessage(ctx) {
-        const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId);
-        if (!authorization.authorized) {
-            return ctx.response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         return this.deleteMessageFromManager(ctx);
     }
     async integrationListInstances({ request, response }) {
@@ -989,14 +865,6 @@ class BotController {
         });
     }
     async integrationRegisterInstance({ request, response }) {
-        const authorization = this.authorizeExternalWrite(request);
-        if (!authorization.authorized) {
-            return response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         try {
             const payload = request.all();
             const clientId = payload.clientId ? String(payload.clientId).trim() : undefined;
@@ -1026,7 +894,7 @@ class BotController {
                 credentials: {
                     token: result.token,
                     tokenReturnedOnce: Boolean(result.token),
-                    note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'No new token was returned. Existing tokens are never exposed again; rotate the token when necessary.'
+                    note: result.token ? 'Optional legacy credential; API access does not require it.' : 'No new token was returned. Existing tokens are never exposed again; rotate the token when necessary.'
                 }
             });
         }
@@ -1084,14 +952,6 @@ class BotController {
         }
     }
     async integrationConfigureInstance({ request, response, params }) {
-        const authorization = this.authorizeExternalWrite(request);
-        if (!authorization.authorized) {
-            return response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         try {
             const payload = request.all();
             this.validateCommandFiles(payload.commandFiles);
@@ -1138,7 +998,7 @@ class BotController {
                 credentials: {
                     token,
                     tokenReturnedOnce: true,
-                    note: 'Store this bearer token now; only its hash is kept by the server.'
+                    note: 'Optional legacy credential; API access does not require it.'
                 },
                 instance: this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
             });
@@ -1148,25 +1008,9 @@ class BotController {
         }
     }
     async integrationReconnectInstance(ctx) {
-        const authorization = this.authorizeExternalWrite(ctx.request);
-        if (!authorization.authorized) {
-            return ctx.response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         return this.integrationReconnectInstanceFromManager(ctx);
     }
     async integrationRotateToken(ctx) {
-        const authorization = this.authorizeExternalWrite(ctx.request);
-        if (!authorization.authorized) {
-            return ctx.response.status(authorization.statusCode || 403).json({
-                status: 'error',
-                success: false,
-                error: authorization.message,
-            });
-        }
         return this.integrationRotateTokenFromManager(ctx);
     }
     async integrationSendMessage(ctx) {

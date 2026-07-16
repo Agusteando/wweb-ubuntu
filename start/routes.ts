@@ -53,8 +53,8 @@ Route.group(() => {
 
 }).middleware('auth') // Applying Native Browser Protection
 
-// Versioned external integration API. Read/configuration endpoints remain available
-// for compatibility; outbound message and story writes require an API or instance token.
+// Versioned external integration API. Endpoints remain unauthenticated for backward compatibility.
+// Duplicate sends are still suppressed by the idempotency ledger and WhatsApp is called once.
 Route.group(() => {
   Route.get('/instances', 'BotController.integrationListInstances')
   Route.post('/instances', 'BotController.integrationRegisterInstance')
@@ -72,7 +72,7 @@ Route.group(() => {
 // ==========================================
 // EXTERNAL API WRITE ENDPOINTS
 // ==========================================
-// Every endpoint below requires Authorization: Bearer <token> or X-API-Key.
+// These legacy endpoints remain unauthenticated for backward compatibility.
 // A send is invoked once. Duplicate requests are replayed from the idempotency
 // ledger and never call WhatsApp again.
 

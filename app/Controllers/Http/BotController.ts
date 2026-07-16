@@ -7,8 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
 import { getSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
-import ApiSendGuard from 'App/Services/ApiSendGuard'
-import * as crypto from 'crypto'
+import { resolveCanonicalChatId } from 'App/Whatsapp/Utils/ChatId'
 
 type DispatchResult = {
   statusCode: number;
@@ -22,103 +21,6 @@ export default class BotController {
 
   private get scheduleService(): any {
     return Application.container.use('App/Services/ScheduleService')
-  }
-
-  private envMillis(name: 'API_SEND_DEDUP_WINDOW_MS' | 'API_SEND_IDEMPOTENCY_TTL_MS', fallback: number): number {
-    const parsed = Number(Env.get(name))
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-  }
-
-  private secureTokenEquals(left: string, right: string): boolean {
-    const leftBuffer = Buffer.from(left)
-    const rightBuffer = Buffer.from(right)
-    return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
-  }
-
-  private extractApiToken(request: HttpContextContract['request']): string {
-    const authorization = request.header('authorization') || ''
-    const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
-    return String(bearerMatch?.[1] || request.header('x-api-key') || '').trim()
-  }
-
-  private authorizeExternalWrite(request: HttpContextContract['request'], requestedClientId?: string): {
-    authorized: boolean
-    statusCode?: number
-    message?: string
-  } {
-    const token = this.extractApiToken(request)
-    if (!token) {
-      return {
-        authorized: false,
-        statusCode: 401,
-        message: 'A Bearer token or X-API-Key is required for outbound API operations.',
-      }
-    }
-
-    const globalToken = Env.get('API_SEND_TOKEN')
-    if (globalToken && this.secureTokenEquals(token, globalToken)) return { authorized: true }
-    if (this.botService.verifyAdminIntegrationToken(token)) return { authorized: true }
-
-    if (requestedClientId && requestedClientId.toLowerCase() !== 'any') {
-      if (this.botService.verifyIntegrationToken(requestedClientId, token)) return { authorized: true }
-    }
-
-    return {
-      authorized: false,
-      statusCode: 403,
-      message: 'The supplied API token is not authorized for this outbound operation.',
-    }
-  }
-
-  private apiSendFingerprint(request: HttpContextContract['request'], requestedClientId?: string): any {
-    const payload = { ...request.all() }
-    delete payload.idempotencyKey
-
-    const uploadedFile: any = request.file('file')
-    const file = uploadedFile
-      ? {
-          name: uploadedFile.clientName,
-          size: uploadedFile.size,
-          type: uploadedFile.headers?.['content-type'],
-        }
-      : undefined
-
-    const targetIds = (Array.isArray(payload.chatId) ? payload.chatId : [payload.chatId])
-      .filter((value: any) => value !== undefined && value !== null)
-      .map((value: any) => String(value).trim())
-    const uniqueTargetIds = Array.from(new Set(targetIds)).sort()
-
-    return {
-      requestedClientId: requestedClientId || 'any',
-      chatId: uniqueTargetIds,
-      message: payload.message,
-      caption: payload.caption,
-      filepath: payload.filepath,
-      filename: payload.filename,
-      mimetype: payload.mimetype,
-      mentions: payload.mentions,
-      options: payload.options,
-      file,
-    }
-  }
-
-  private async dispatchMessagesGuarded(
-    request: HttpContextContract['request'],
-    requestedClientId?: string
-  ) {
-    const explicitKey = String(request.header('idempotency-key') || request.input('idempotencyKey') || '').trim()
-    const scope = `send:${requestedClientId || 'any'}`
-    const keyData = ApiSendGuard.createKey(scope, this.apiSendFingerprint(request, requestedClientId), explicitKey)
-    const ttlMs = keyData.keyType === 'explicit'
-      ? this.envMillis('API_SEND_IDEMPOTENCY_TTL_MS', 7 * 24 * 60 * 60 * 1000)
-      : this.envMillis('API_SEND_DEDUP_WINDOW_MS', 24 * 60 * 60 * 1000)
-
-    return ApiSendGuard.execute(
-      keyData.key,
-      keyData.keyType,
-      ttlMs,
-      () => this.dispatchMessages(request, requestedClientId)
-    )
   }
 
   private getIntegrationBaseUrl(request: HttpContextContract['request']): string {
@@ -611,28 +513,29 @@ export default class BotController {
       const sentMessages: any[] = []
       const failedMessages: Array<{ chatId: string; error: string }> = []
       for (let i = 0; i < chatId.length; i++) {
-        const currentChatId = chatId[i]
+        const requestedChatId = chatId[i]
         try {
+          const currentChatId = await resolveCanonicalChatId(client, requestedChatId)
           const result = await client.sendMessage(currentChatId, message, args)
           const metadata = getSentMessageMetadata(result, currentChatId)
           sentMessages.push({
             chatId: currentChatId,
+            requestedChatId: requestedChatId !== currentChatId ? requestedChatId : undefined,
             id: metadata.id,
             timestamp: metadata.timestamp,
             state: metadata.state,
           })
         } catch (sendMessageError: any) {
           const errorMessage = sendMessageError?.message || String(sendMessageError)
-          failedMessages.push({ chatId: currentChatId, error: errorMessage })
-          console.error(`Failed to send message to chat ${currentChatId}:`, sendMessageError)
+          failedMessages.push({ chatId: requestedChatId, error: errorMessage })
+          console.error(`Failed to send message to chat ${requestedChatId}:`, sendMessageError)
         }
       }
 
       const acceptedAny = sentMessages.length > 0
       const success = acceptedAny && failedMessages.length === 0
       const status = success ? 'ok' : acceptedAny ? 'partial' : 'error'
-      const confirmedCount = sentMessages.filter((item) => item.state === 'confirmed').length
-      const submittedCount = sentMessages.filter((item) => item.state === 'submitted').length
+      const confirmedCount = sentMessages.length
       let summaryText = ''
       if (typeof message === 'string') summaryText = message.substring(0, 100)
       else if (caption) summaryText = caption.substring(0, 100)
@@ -650,7 +553,7 @@ export default class BotController {
       })
 
       return {
-        statusCode: acceptedAny ? (submittedCount > 0 && confirmedCount === 0 ? 202 : 200) : 502,
+        statusCode: acceptedAny ? 200 : 502,
         body: {
           status,
           success,
@@ -659,7 +562,7 @@ export default class BotController {
           failures: failedMessages,
           delivery: {
             confirmed: confirmedCount,
-            submitted: submittedCount,
+            submitted: 0,
             retriesPerformed: 0,
           },
           error: success ? undefined : acceptedAny
@@ -690,27 +593,9 @@ export default class BotController {
   }
 
   public async sendMessages({ request, response, params }: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(request, params.clientId)
-    if (!authorization.authorized) {
-      return response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
-
-    const guarded = await this.dispatchMessagesGuarded(request, params.clientId)
-    response.header('Idempotent-Replay', guarded.replayed ? 'true' : 'false')
     response.header('X-Send-Retries', '0')
-
-    return response.status(guarded.result.statusCode).json({
-      ...guarded.result.body,
-      idempotency: {
-        replayed: guarded.replayed,
-        type: guarded.keyType,
-        keyExpiresAt: guarded.expiresAt,
-      },
-    })
+    const result = await this.dispatchMessages(request, params.clientId)
+    return response.status(result.statusCode).json(result.body)
   }
 
   // Live Quick Action endpoint explicitly resolving real status broadcasting logic natively
@@ -761,7 +646,6 @@ export default class BotController {
         const metadata = getSentMessageMetadata(result, 'status@broadcast');
         const messageId = metadata.id;
         
-        // Analytics require a concrete WhatsApp message ID. A submitted-only send is not resent.
         if (messageId) {
           await this.scheduleService.createSchedule(clientId, {
               type: 'postTextStatus',
@@ -784,7 +668,7 @@ export default class BotController {
           payloadSummary: `Text Story: ${statusText.substring(0, 100)}`
         });
 
-        return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+        return response.status(200).json({
           status: 'ok',
           success: true,
           clientUsed: clientId,
@@ -841,7 +725,7 @@ export default class BotController {
           payloadSummary: `Media Story: ${caption ? caption.substring(0, 100) : file.clientName}`
         });
 
-        return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+        return response.status(200).json({
           status: 'ok',
           success: true,
           clientUsed: clientId,
@@ -865,14 +749,6 @@ export default class BotController {
   }
 
   public async postStatus(ctx: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
-    if (!authorization.authorized) {
-      return ctx.response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
     ctx.response.header('X-Send-Retries', '0')
     return this.postStatusFromManager(ctx)
   }
@@ -914,23 +790,38 @@ export default class BotController {
     try {
       const msg = await client.getMessageById(messageId);
       if (!msg) return response.status(404).json({ status: 'error', error: 'Message not found' });
-      const edited = await msg.edit(content, options);
-      if (!edited) return response.json({ status: 'ok', success: true, message: null });
+      if (!msg.fromMe) return response.status(400).json({ status: 'error', error: 'Only messages sent by this WhatsApp client can be edited' });
+
+      const stableMessageId = getSentMessageMetadata(msg, msg.to || msg.from || 'unknown').id || messageId;
+      const currentBody = typeof msg.body === 'string' ? msg.body : '';
+      const duplicateEdit = currentBody === content;
+      const edited = duplicateEdit ? msg : await msg.edit(content, options);
+      const resultMessage = edited || msg;
+      const metadata = getSentMessageMetadata(resultMessage, resultMessage.to || resultMessage.from || 'unknown');
 
       this.botService.logApi({
         clientId,
         endpoint: request.url(),
         method: request.method(),
         status: 'success',
-        target: edited.to,
-        payloadSummary: `Edited: ${content.substring(0, 100)}`
+        target: resultMessage.to || resultMessage.from || 'unknown',
+        payloadSummary: duplicateEdit
+          ? `Edit skipped because content is unchanged: ${content.substring(0, 100)}`
+          : `Edited: ${content.substring(0, 100)}`
       });
 
+      response.header('X-Edit-Retries', '0');
       return response.json({
         status: 'ok',
         success: true,
         clientUsed: clientId,
-        message: { id: edited.id?._serialized ?? edited.id, chatId: edited.to, timestamp: edited.timestamp },
+        changed: !duplicateEdit,
+        editState: duplicateEdit ? 'unchanged' : 'confirmed',
+        message: {
+          id: metadata.id || stableMessageId,
+          chatId: resultMessage.to || resultMessage.from,
+          timestamp: resultMessage.timestamp,
+        },
       });
     } catch (error: any) {
       this.botService.logApi({
@@ -947,14 +838,6 @@ export default class BotController {
   }
 
   public async editMessage(ctx: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
-    if (!authorization.authorized) {
-      return ctx.response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
     return this.editMessageFromManager(ctx)
   }
 
@@ -1032,14 +915,6 @@ export default class BotController {
   }
 
   public async deleteMessage(ctx: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
-    if (!authorization.authorized) {
-      return ctx.response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
     return this.deleteMessageFromManager(ctx)
   }
 
@@ -1052,15 +927,6 @@ export default class BotController {
   }
 
   public async integrationRegisterInstance({ request, response }: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(request)
-    if (!authorization.authorized) {
-      return response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
-
     try {
       const payload = request.all()
       const clientId = payload.clientId ? String(payload.clientId).trim() : undefined
@@ -1091,7 +957,7 @@ export default class BotController {
         credentials: {
           token: result.token,
           tokenReturnedOnce: Boolean(result.token),
-          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'No new token was returned. Existing tokens are never exposed again; rotate the token when necessary.'
+          note: result.token ? 'Optional legacy credential; API access does not require it.' : 'No new token was returned. Existing tokens are never exposed again; rotate the token when necessary.'
         }
       })
     } catch (error: any) {
@@ -1157,15 +1023,6 @@ export default class BotController {
   }
 
   public async integrationConfigureInstance({ request, response, params }: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(request)
-    if (!authorization.authorized) {
-      return response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
-
     try {
       const payload = request.all()
       this.validateCommandFiles(payload.commandFiles)
@@ -1213,7 +1070,7 @@ export default class BotController {
         credentials: {
           token,
           tokenReturnedOnce: true,
-          note: 'Store this bearer token now; only its hash is kept by the server.'
+          note: 'Optional legacy credential; API access does not require it.'
         },
         instance: this.botService.getIntegrationDetails(params.clientId, this.getIntegrationBaseUrl(request), false)
       })
@@ -1223,26 +1080,10 @@ export default class BotController {
   }
 
   public async integrationReconnectInstance(ctx: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(ctx.request)
-    if (!authorization.authorized) {
-      return ctx.response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
     return this.integrationReconnectInstanceFromManager(ctx)
   }
 
   public async integrationRotateToken(ctx: HttpContextContract) {
-    const authorization = this.authorizeExternalWrite(ctx.request)
-    if (!authorization.authorized) {
-      return ctx.response.status(authorization.statusCode || 403).json({
-        status: 'error',
-        success: false,
-        error: authorization.message,
-      })
-    }
     return this.integrationRotateTokenFromManager(ctx)
   }
 

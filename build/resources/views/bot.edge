@@ -219,7 +219,7 @@
                       @if(client.integration.credentials.hasToken)
                         <p class="text-sm font-mono font-extrabold text-slate-800">{{ client.integration.credentials.tokenPrefix }}...{{ client.integration.credentials.tokenLast4 }}</p>
                       @else
-                        <p class="text-sm font-semibold text-slate-500">Token requerido para enviar</p>
+                        <p class="text-sm font-semibold text-slate-500">Token opcional (no requerido)</p>
                       @endif
                     </div>
                   </div>
@@ -255,11 +255,10 @@
 
 5. Send exactly once:
    POST {{ client.integration.endpoints.sendMessage }}
-   Authorization: Bearer &lt;instance-token&gt;
    Idempotency-Key: message-uuid
    {"chatId":["5215555555555@c.us"],"message":"Hello"}
 
-Outbound API calls require a token. Duplicate requests replay the stored response and never call WhatsApp again.
+Outbound API calls remain backward-compatible without authentication. Duplicate requests replay the stored response and never call WhatsApp again.
 Errors use {"status":"error","error":{"code":"...","message":"..."}}.</pre>
                   </div>
 

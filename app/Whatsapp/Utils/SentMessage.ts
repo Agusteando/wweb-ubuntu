@@ -1,7 +1,7 @@
 export type SentMessageMetadata = {
   id: string | null
   timestamp?: number
-  state: 'confirmed' | 'submitted'
+  state: 'confirmed'
 }
 
 export function getSentMessageId(result: any): string | null {
@@ -37,16 +37,8 @@ export function getSentMessageMetadata(result: any, destination: string): SentMe
     }
   }
 
-  if (result?.__singleAttemptReceipt === true && result?.submitted === true) {
-    return {
-      id: null,
-      timestamp: result.timestamp,
-      state: 'submitted',
-    }
-  }
-
   throw new Error(
-    `The single WhatsApp send call for ${destination} failed before it was accepted. No retry or resend was performed.`
+    `WhatsApp did not return a stable message ID for ${destination}. The message was not resent.`
   )
 }
 
