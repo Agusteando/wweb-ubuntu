@@ -6,7 +6,9 @@ import CommandRegistry from 'App/Services/CommandRegistry'
 import fs from 'fs'
 import path from 'path'
 import { MessageMedia } from 'whatsapp-web.js'
-import { requireSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
+import { getSentMessageMetadata } from 'App/Whatsapp/Utils/SentMessage'
+import ApiSendGuard from 'App/Services/ApiSendGuard'
+import * as crypto from 'crypto'
 
 type DispatchResult = {
   statusCode: number;
@@ -20,6 +22,103 @@ export default class BotController {
 
   private get scheduleService(): any {
     return Application.container.use('App/Services/ScheduleService')
+  }
+
+  private envMillis(name: 'API_SEND_DEDUP_WINDOW_MS' | 'API_SEND_IDEMPOTENCY_TTL_MS', fallback: number): number {
+    const parsed = Number(Env.get(name))
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }
+
+  private secureTokenEquals(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left)
+    const rightBuffer = Buffer.from(right)
+    return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
+  }
+
+  private extractApiToken(request: HttpContextContract['request']): string {
+    const authorization = request.header('authorization') || ''
+    const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+    return String(bearerMatch?.[1] || request.header('x-api-key') || '').trim()
+  }
+
+  private authorizeExternalWrite(request: HttpContextContract['request'], requestedClientId?: string): {
+    authorized: boolean
+    statusCode?: number
+    message?: string
+  } {
+    const token = this.extractApiToken(request)
+    if (!token) {
+      return {
+        authorized: false,
+        statusCode: 401,
+        message: 'A Bearer token or X-API-Key is required for outbound API operations.',
+      }
+    }
+
+    const globalToken = Env.get('API_SEND_TOKEN')
+    if (globalToken && this.secureTokenEquals(token, globalToken)) return { authorized: true }
+    if (this.botService.verifyAdminIntegrationToken(token)) return { authorized: true }
+
+    if (requestedClientId && requestedClientId.toLowerCase() !== 'any') {
+      if (this.botService.verifyIntegrationToken(requestedClientId, token)) return { authorized: true }
+    }
+
+    return {
+      authorized: false,
+      statusCode: 403,
+      message: 'The supplied API token is not authorized for this outbound operation.',
+    }
+  }
+
+  private apiSendFingerprint(request: HttpContextContract['request'], requestedClientId?: string): any {
+    const payload = { ...request.all() }
+    delete payload.idempotencyKey
+
+    const uploadedFile: any = request.file('file')
+    const file = uploadedFile
+      ? {
+          name: uploadedFile.clientName,
+          size: uploadedFile.size,
+          type: uploadedFile.headers?.['content-type'],
+        }
+      : undefined
+
+    const targetIds = (Array.isArray(payload.chatId) ? payload.chatId : [payload.chatId])
+      .filter((value: any) => value !== undefined && value !== null)
+      .map((value: any) => String(value).trim())
+    const uniqueTargetIds = Array.from(new Set(targetIds)).sort()
+
+    return {
+      requestedClientId: requestedClientId || 'any',
+      chatId: uniqueTargetIds,
+      message: payload.message,
+      caption: payload.caption,
+      filepath: payload.filepath,
+      filename: payload.filename,
+      mimetype: payload.mimetype,
+      mentions: payload.mentions,
+      options: payload.options,
+      file,
+    }
+  }
+
+  private async dispatchMessagesGuarded(
+    request: HttpContextContract['request'],
+    requestedClientId?: string
+  ) {
+    const explicitKey = String(request.header('idempotency-key') || request.input('idempotencyKey') || '').trim()
+    const scope = `send:${requestedClientId || 'any'}`
+    const keyData = ApiSendGuard.createKey(scope, this.apiSendFingerprint(request, requestedClientId), explicitKey)
+    const ttlMs = keyData.keyType === 'explicit'
+      ? this.envMillis('API_SEND_IDEMPOTENCY_TTL_MS', 7 * 24 * 60 * 60 * 1000)
+      : this.envMillis('API_SEND_DEDUP_WINDOW_MS', 24 * 60 * 60 * 1000)
+
+    return ApiSendGuard.execute(
+      keyData.key,
+      keyData.keyType,
+      ttlMs,
+      () => this.dispatchMessages(request, requestedClientId)
+    )
   }
 
   private getIntegrationBaseUrl(request: HttpContextContract['request']): string {
@@ -460,6 +559,7 @@ export default class BotController {
     try {
       if (typeof chatId === 'string') chatId = [chatId]
       if (!chatId || !Array.isArray(chatId) || !chatId.length) throw new Error('chatId is undefined, not an array, or empty')
+      chatId = Array.from(new Set(chatId.map((id: any) => typeof id === 'string' ? id.trim() : id)))
 
       for (const id of chatId) {
         if (typeof id !== 'string' || !id.includes('@')) throw new Error(`Invalid chatId format: ${id}`)
@@ -514,8 +614,13 @@ export default class BotController {
         const currentChatId = chatId[i]
         try {
           const result = await client.sendMessage(currentChatId, message, args)
-          const metadata = requireSentMessageMetadata(result, currentChatId)
-          sentMessages.push({ chatId: currentChatId, id: metadata.id, timestamp: metadata.timestamp })
+          const metadata = getSentMessageMetadata(result, currentChatId)
+          sentMessages.push({
+            chatId: currentChatId,
+            id: metadata.id,
+            timestamp: metadata.timestamp,
+            state: metadata.state,
+          })
         } catch (sendMessageError: any) {
           const errorMessage = sendMessageError?.message || String(sendMessageError)
           failedMessages.push({ chatId: currentChatId, error: errorMessage })
@@ -523,9 +628,11 @@ export default class BotController {
         }
       }
 
-      const deliveredAny = sentMessages.length > 0
-      const success = deliveredAny && failedMessages.length === 0
-      const status = success ? 'ok' : deliveredAny ? 'partial' : 'error'
+      const acceptedAny = sentMessages.length > 0
+      const success = acceptedAny && failedMessages.length === 0
+      const status = success ? 'ok' : acceptedAny ? 'partial' : 'error'
+      const confirmedCount = sentMessages.filter((item) => item.state === 'confirmed').length
+      const submittedCount = sentMessages.filter((item) => item.state === 'submitted').length
       let summaryText = ''
       if (typeof message === 'string') summaryText = message.substring(0, 100)
       else if (caption) summaryText = caption.substring(0, 100)
@@ -543,16 +650,21 @@ export default class BotController {
       })
 
       return {
-        statusCode: deliveredAny ? 200 : 502,
+        statusCode: acceptedAny ? (submittedCount > 0 && confirmedCount === 0 ? 202 : 200) : 502,
         body: {
           status,
           success,
           clientUsed: clientId,
           messages: sentMessages,
           failures: failedMessages,
-          error: success ? undefined : deliveredAny
-            ? 'The message was delivered to only some targets.'
-            : 'WhatsApp did not confirm delivery to any target.'
+          delivery: {
+            confirmed: confirmedCount,
+            submitted: submittedCount,
+            retriesPerformed: 0,
+          },
+          error: success ? undefined : acceptedAny
+            ? 'The single send attempt was accepted for only some targets.'
+            : 'The single send attempt failed for every target. No retry or resend was performed.'
         }
       }
     } catch (error: any) {
@@ -572,13 +684,37 @@ export default class BotController {
     }
   }
 
-  public async sendMessages({ request, response, params }: HttpContextContract) {
+  public async sendMessagesFromManager({ request, response, params }: HttpContextContract) {
     const result = await this.dispatchMessages(request, params.clientId)
     return response.status(result.statusCode).json(result.body)
   }
 
+  public async sendMessages({ request, response, params }: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(request, params.clientId)
+    if (!authorization.authorized) {
+      return response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+
+    const guarded = await this.dispatchMessagesGuarded(request, params.clientId)
+    response.header('Idempotent-Replay', guarded.replayed ? 'true' : 'false')
+    response.header('X-Send-Retries', '0')
+
+    return response.status(guarded.result.statusCode).json({
+      ...guarded.result.body,
+      idempotency: {
+        replayed: guarded.replayed,
+        type: guarded.keyType,
+        keyExpiresAt: guarded.expiresAt,
+      },
+    })
+  }
+
   // Live Quick Action endpoint explicitly resolving real status broadcasting logic natively
-  public async postStatus({ request, response, params }: HttpContextContract) {
+  public async postStatusFromManager({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
 
@@ -622,19 +758,22 @@ export default class BotController {
         }
         
         const result = await client.sendMessage('status@broadcast', statusText, args);
-        const messageId = requireSentMessageMetadata(result, 'status@broadcast').id;
+        const metadata = getSentMessageMetadata(result, 'status@broadcast');
+        const messageId = metadata.id;
         
-        // Push an inert schedule explicitly so the Status Analytics view tracks its total views dynamically
-        await this.scheduleService.createSchedule(clientId, {
-            type: 'postTextStatus',
-            statusText,
-            backgroundColor,
-            fontStyle: fontStyle !== undefined && fontStyle !== null ? parseInt(fontStyle, 10) : undefined,
-            isRecurring: false,
-            timestamp: Date.now(),
-            lastRunAt: Date.now(),
-            statusMessageId: messageId
-        });
+        // Analytics require a concrete WhatsApp message ID. A submitted-only send is not resent.
+        if (messageId) {
+          await this.scheduleService.createSchedule(clientId, {
+              type: 'postTextStatus',
+              statusText,
+              backgroundColor,
+              fontStyle: fontStyle !== undefined && fontStyle !== null ? parseInt(fontStyle, 10) : undefined,
+              isRecurring: false,
+              timestamp: Date.now(),
+              lastRunAt: Date.now(),
+              statusMessageId: messageId
+          });
+        }
         
         this.botService.logApi({
           clientId: clientId,
@@ -645,7 +784,14 @@ export default class BotController {
           payloadSummary: `Text Story: ${statusText.substring(0, 100)}`
         });
 
-        return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
+        return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+          status: 'ok',
+          success: true,
+          clientUsed: clientId,
+          messageId,
+          deliveryState: metadata.state,
+          retriesPerformed: 0,
+        });
         
       } else {
         if (!file) throw new Error('A media file is required to post a media status.');
@@ -669,19 +815,22 @@ export default class BotController {
         const result = await client.sendMessage('status@broadcast', media, args);
         fs.unlinkSync(fullPath); 
         
-        const messageId = requireSentMessageMetadata(result, 'status@broadcast').id;
+        const metadata = getSentMessageMetadata(result, 'status@broadcast');
+        const messageId = metadata.id;
         
-        await this.scheduleService.createSchedule(clientId, {
-            type: 'postMediaStatus',
-            mediaPath: file.clientName, 
-            caption,
-            isGif: statusType === 'gif',
-            isAudio: statusType === 'audio',
-            isRecurring: false,
-            timestamp: Date.now(),
-            lastRunAt: Date.now(),
-            statusMessageId: messageId
-        });
+        if (messageId) {
+          await this.scheduleService.createSchedule(clientId, {
+              type: 'postMediaStatus',
+              mediaPath: file.clientName, 
+              caption,
+              isGif: statusType === 'gif',
+              isAudio: statusType === 'audio',
+              isRecurring: false,
+              timestamp: Date.now(),
+              lastRunAt: Date.now(),
+              statusMessageId: messageId
+          });
+        }
 
         this.botService.logApi({
           clientId: clientId,
@@ -692,7 +841,14 @@ export default class BotController {
           payloadSummary: `Media Story: ${caption ? caption.substring(0, 100) : file.clientName}`
         });
 
-        return response.json({ status: 'ok', success: true, clientUsed: clientId, messageId });
+        return response.status(metadata.state === 'submitted' ? 202 : 200).json({
+          status: 'ok',
+          success: true,
+          clientUsed: clientId,
+          messageId,
+          deliveryState: metadata.state,
+          retriesPerformed: 0,
+        });
       }
     } catch (error: any) {
       this.botService.logApi({
@@ -708,7 +864,20 @@ export default class BotController {
     }
   }
 
-  public async editMessage({ request, response, params }: HttpContextContract) {
+  public async postStatus(ctx: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
+    if (!authorization.authorized) {
+      return ctx.response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+    ctx.response.header('X-Send-Retries', '0')
+    return this.postStatusFromManager(ctx)
+  }
+
+  public async editMessageFromManager({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
 
@@ -777,7 +946,19 @@ export default class BotController {
     }
   }
 
-  public async deleteMessage({ request, response, params }: HttpContextContract) {
+  public async editMessage(ctx: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
+    if (!authorization.authorized) {
+      return ctx.response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+    return this.editMessageFromManager(ctx)
+  }
+
+  public async deleteMessageFromManager({ request, response, params }: HttpContextContract) {
     let clientId = params.clientId;
     let client;
 
@@ -850,6 +1031,18 @@ export default class BotController {
     }
   }
 
+  public async deleteMessage(ctx: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(ctx.request, ctx.params.clientId)
+    if (!authorization.authorized) {
+      return ctx.response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+    return this.deleteMessageFromManager(ctx)
+  }
+
   public async integrationListInstances({ request, response }: HttpContextContract) {
     return response.json({
       status: 'ok',
@@ -859,6 +1052,15 @@ export default class BotController {
   }
 
   public async integrationRegisterInstance({ request, response }: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(request)
+    if (!authorization.authorized) {
+      return response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+
     try {
       const payload = request.all()
       const clientId = payload.clientId ? String(payload.clientId).trim() : undefined
@@ -876,7 +1078,7 @@ export default class BotController {
         allowedOrigins: payload.allowedOrigins,
         metadata: payload.metadata,
         idempotencyKey,
-        issueToken: payload.issueToken === true || payload.issueToken === 'true'
+        issueToken: payload.issueToken !== false && payload.issueToken !== 'false'
       })
       const instance = this.botService.getIntegrationDetails(result.clientId, this.getIntegrationBaseUrl(request), true)
 
@@ -889,7 +1091,7 @@ export default class BotController {
         credentials: {
           token: result.token,
           tokenReturnedOnce: Boolean(result.token),
-          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'No token was issued. Integration instances are tokenless by default.'
+          note: result.token ? 'Store this bearer token now; only its hash is kept by the server.' : 'No new token was returned. Existing tokens are never exposed again; rotate the token when necessary.'
         }
       })
     } catch (error: any) {
@@ -955,6 +1157,15 @@ export default class BotController {
   }
 
   public async integrationConfigureInstance({ request, response, params }: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(request)
+    if (!authorization.authorized) {
+      return response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
+    }
+
     try {
       const payload = request.all()
       this.validateCommandFiles(payload.commandFiles)
@@ -979,7 +1190,7 @@ export default class BotController {
     }
   }
 
-  public async integrationReconnectInstance({ request, response, params }: HttpContextContract) {
+  public async integrationReconnectInstanceFromManager({ request, response, params }: HttpContextContract) {
     try {
       await this.botService.reconnectClient(params.clientId)
       return response.status(202).json({
@@ -993,7 +1204,7 @@ export default class BotController {
     }
   }
 
-  public async integrationRotateToken({ request, response, params }: HttpContextContract) {
+  public async integrationRotateTokenFromManager({ request, response, params }: HttpContextContract) {
     try {
       const token = await this.botService.rotateIntegrationToken(params.clientId)
       return response.json({
@@ -1011,33 +1222,32 @@ export default class BotController {
     }
   }
 
-  public async integrationSendMessage({ request, response, params }: HttpContextContract) {
-    const idempotencyKey = request.header('idempotency-key') || request.input('idempotencyKey')
-    if (idempotencyKey) {
-      const receipt = this.botService.getDeliveryReceipt(params.clientId, idempotencyKey)
-      if (receipt) {
-        response.header('Idempotent-Replay', 'true')
-        return response.status(receipt.statusCode).json({
-          ...receipt.response,
-          idempotency: {
-            replayed: true,
-            keyExpiresAt: receipt.expiresAt
-          }
-        })
-      }
+  public async integrationReconnectInstance(ctx: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(ctx.request)
+    if (!authorization.authorized) {
+      return ctx.response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
     }
+    return this.integrationReconnectInstanceFromManager(ctx)
+  }
 
-    const result = await this.dispatchMessages(request, params.clientId)
-    const body = {
-      ...result.body,
-      idempotency: idempotencyKey ? { replayed: false } : undefined
+  public async integrationRotateToken(ctx: HttpContextContract) {
+    const authorization = this.authorizeExternalWrite(ctx.request)
+    if (!authorization.authorized) {
+      return ctx.response.status(authorization.statusCode || 403).json({
+        status: 'error',
+        success: false,
+        error: authorization.message,
+      })
     }
+    return this.integrationRotateTokenFromManager(ctx)
+  }
 
-    if (idempotencyKey && result.statusCode >= 200 && result.statusCode < 300) {
-      await this.botService.rememberDeliveryReceipt(params.clientId, idempotencyKey, result.statusCode, body)
-    }
-
-    return response.status(result.statusCode).json(body)
+  public async integrationSendMessage(ctx: HttpContextContract) {
+    return this.sendMessages(ctx)
   }
 
   public async integrationPostStory(ctx: HttpContextContract) {

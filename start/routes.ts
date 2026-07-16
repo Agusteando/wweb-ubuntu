@@ -38,10 +38,23 @@ Route.group(() => {
   Route.delete('/whatsapp-manager/api/logs/:id', 'BotController.deleteApiLog')
   Route.post('/whatsapp-manager/api/settings/toggle', 'BotController.toggleApiStatus')
 
+  // Authenticated manager write actions. These never use the external API token.
+  Route.post('/whatsapp-manager/bot/send/any', 'BotController.sendMessagesFromManager')
+  Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessagesFromManager')
+  Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessagesFromManager')
+  Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessagesFromManager')
+  Route.post('/whatsapp-manager/bot/status/:clientId', 'BotController.postStatusFromManager')
+  Route.post('/whatsapp-manager/bot/edit/any', 'BotController.editMessageFromManager')
+  Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessageFromManager')
+  Route.post('/whatsapp-manager/bot/delete/any', 'BotController.deleteMessageFromManager')
+  Route.post('/whatsapp-manager/bot/delete/:clientId', 'BotController.deleteMessageFromManager')
+  Route.post('/whatsapp-manager/manager/integration/:clientId/reconnect', 'BotController.integrationReconnectInstanceFromManager')
+  Route.post('/whatsapp-manager/manager/integration/:clientId/token/rotate', 'BotController.integrationRotateTokenFromManager')
+
 }).middleware('auth') // Applying Native Browser Protection
 
-// Versioned external integration API. These endpoints are intentionally public
-// so external systems can create, connect, inspect, and use instances tokenless.
+// Versioned external integration API. Read/configuration endpoints remain available
+// for compatibility; outbound message and story writes require an API or instance token.
 Route.group(() => {
   Route.get('/instances', 'BotController.integrationListInstances')
   Route.post('/instances', 'BotController.integrationRegisterInstance')
@@ -57,34 +70,25 @@ Route.group(() => {
 }).prefix('/whatsapp-manager/integration/v1')
 
 // ==========================================
-// PUBLIC STABLE & DYNAMIC API ENDPOINTS
+// EXTERNAL API WRITE ENDPOINTS
 // ==========================================
+// Every endpoint below requires Authorization: Bearer <token> or X-API-Key.
+// A send is invoked once. Duplicate requests are replayed from the idempotency
+// ledger and never call WhatsApp again.
 
 Route.post('/whatsapp-manager/api/send', 'BotController.sendMessages')
-Route.post('/whatsapp-manager/api/edit', 'BotController.editMessage')
-Route.post('/whatsapp-manager/api/delete', 'BotController.deleteMessage')
-
-Route.post('/whatsapp-manager/bot/send/any', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/any', 'BotController.sendMessages')
-Route.post('/whatsapp-manager/bot/edit/any', 'BotController.editMessage')
-Route.post('/whatsapp-manager/api/edit/any', 'BotController.editMessage')
-Route.post('/whatsapp-manager/bot/delete/any', 'BotController.deleteMessage')
-Route.post('/whatsapp-manager/api/delete/any', 'BotController.deleteMessage')
-
-Route.post('/whatsapp-manager/bot/send/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send/:clientId', 'BotController.sendMessages')
-
-Route.post('/whatsapp-manager/bot/edit/:clientId', 'BotController.editMessage')
-Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
-Route.post('/whatsapp-manager/bot/delete/:clientId', 'BotController.deleteMessage')
-Route.post('/whatsapp-manager/api/delete/:clientId', 'BotController.deleteMessage')
-
-Route.post('/whatsapp-manager/bot/send-media', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media', 'BotController.sendMessages')
-Route.post('/whatsapp-manager/bot/send-media/:clientId', 'BotController.sendMessages')
 Route.post('/whatsapp-manager/api/send-media/:clientId', 'BotController.sendMessages')
 
-// Status Posting Endpoints
-Route.post('/whatsapp-manager/bot/status/:clientId', 'BotController.postStatus')
+Route.post('/whatsapp-manager/api/edit', 'BotController.editMessage')
+Route.post('/whatsapp-manager/api/edit/any', 'BotController.editMessage')
+Route.post('/whatsapp-manager/api/edit/:clientId', 'BotController.editMessage')
+
+Route.post('/whatsapp-manager/api/delete', 'BotController.deleteMessage')
+Route.post('/whatsapp-manager/api/delete/any', 'BotController.deleteMessage')
+Route.post('/whatsapp-manager/api/delete/:clientId', 'BotController.deleteMessage')
+
 Route.post('/whatsapp-manager/api/status/:clientId', 'BotController.postStatus')
 Route.post('/whatsapp-manager/api/status/any', 'BotController.postStatus')

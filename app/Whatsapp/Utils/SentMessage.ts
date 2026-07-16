@@ -1,6 +1,7 @@
 export type SentMessageMetadata = {
-  id: string
+  id: string | null
   timestamp?: number
+  state: 'confirmed' | 'submitted'
 }
 
 export function getSentMessageId(result: any): string | null {
@@ -26,16 +27,29 @@ export function getSentMessageId(result: any): string | null {
   return null
 }
 
-export function requireSentMessageMetadata(result: any, destination: string): SentMessageMetadata {
+export function getSentMessageMetadata(result: any, destination: string): SentMessageMetadata {
   const id = getSentMessageId(result)
-  if (!id) {
-    throw new Error(
-      `WhatsApp did not confirm message delivery to ${destination}. The chat may be unavailable, the client session may be stale, or WhatsApp Web returned an empty result.`
-    )
+  if (id) {
+    return {
+      id,
+      timestamp: typeof result?.timestamp === 'number' ? result.timestamp : undefined,
+      state: 'confirmed',
+    }
   }
 
-  return {
-    id,
-    timestamp: typeof result?.timestamp === 'number' ? result.timestamp : undefined,
+  if (result?.__singleAttemptReceipt === true && result?.submitted === true) {
+    return {
+      id: null,
+      timestamp: result.timestamp,
+      state: 'submitted',
+    }
   }
+
+  throw new Error(
+    `The single WhatsApp send call for ${destination} failed before it was accepted. No retry or resend was performed.`
+  )
+}
+
+export function requireSentMessageMetadata(result: any, destination: string): SentMessageMetadata {
+  return getSentMessageMetadata(result, destination)
 }

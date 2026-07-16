@@ -132,18 +132,6 @@ export async function convertWordToPdf(media: any, _message: any): Promise<any> 
   })
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries: number, delayMs: number): Promise<T> {
-  for (let i = 0; i < retries; i++) {
-      try {
-          return await fn();
-      } catch (error) {
-          if (i === retries - 1) throw error;
-          await new Promise(res => setTimeout(res, delayMs));
-      }
-  }
-  throw new Error('Unreachable');
-}
-
 export async function createAudioPrediction2(message: any) {
   const media = await downloadMessageMediaSafely(message, 'AudioTranscriptionAutomation');
   if (!media || !media.data) return null;
@@ -166,17 +154,15 @@ export async function createAudioPrediction2(message: any) {
 
         console.log("Now reaching out to OPENAI's Whisper...");
 
-        let transcription = await withRetry(async () => {
-            const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    ...form.getHeaders(),
-                },
-                timeout: 30000
-            });
-            console.log("Whisper has answered.");
-            return response.data.text;
-        }, 3, 10000);
+        const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                ...form.getHeaders(),
+            },
+            timeout: 30000
+        });
+        console.log("Whisper has answered.");
+        const transcription = response.data.text;
 
         console.log('Whisper output:', transcription);
 

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireSentMessageMetadata = exports.getSentMessageId = void 0;
+exports.requireSentMessageMetadata = exports.getSentMessageMetadata = exports.getSentMessageId = void 0;
 function getSentMessageId(result) {
     const rawId = result?.id;
     if (typeof rawId === 'string' && rawId.trim())
@@ -26,15 +26,27 @@ function getSentMessageId(result) {
     return null;
 }
 exports.getSentMessageId = getSentMessageId;
-function requireSentMessageMetadata(result, destination) {
+function getSentMessageMetadata(result, destination) {
     const id = getSentMessageId(result);
-    if (!id) {
-        throw new Error(`WhatsApp did not confirm message delivery to ${destination}. The chat may be unavailable, the client session may be stale, or WhatsApp Web returned an empty result.`);
+    if (id) {
+        return {
+            id,
+            timestamp: typeof result?.timestamp === 'number' ? result.timestamp : undefined,
+            state: 'confirmed',
+        };
     }
-    return {
-        id,
-        timestamp: typeof result?.timestamp === 'number' ? result.timestamp : undefined,
-    };
+    if (result?.__singleAttemptReceipt === true && result?.submitted === true) {
+        return {
+            id: null,
+            timestamp: result.timestamp,
+            state: 'submitted',
+        };
+    }
+    throw new Error(`The single WhatsApp send call for ${destination} failed before it was accepted. No retry or resend was performed.`);
+}
+exports.getSentMessageMetadata = getSentMessageMetadata;
+function requireSentMessageMetadata(result, destination) {
+    return getSentMessageMetadata(result, destination);
 }
 exports.requireSentMessageMetadata = requireSentMessageMetadata;
 //# sourceMappingURL=SentMessage.js.map

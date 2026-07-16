@@ -145,19 +145,6 @@ async function convertWordToPdf(media, _message) {
     });
 }
 exports.convertWordToPdf = convertWordToPdf;
-async function withRetry(fn, retries, delayMs) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await fn();
-        }
-        catch (error) {
-            if (i === retries - 1)
-                throw error;
-            await new Promise(res => setTimeout(res, delayMs));
-        }
-    }
-    throw new Error('Unreachable');
-}
 async function createAudioPrediction2(message) {
     const media = await (0, QuotedMessage_1.downloadMessageMediaSafely)(message, 'AudioTranscriptionAutomation');
     if (!media || !media.data)
@@ -177,17 +164,15 @@ async function createAudioPrediction2(message) {
                 form.append('model', 'whisper-1');
                 form.append('prompt', '¡Hola!\n\n¿Cómo estás?\n\nBienvenido a mi bitácora:\nQuisiera comenzar con...');
                 console.log("Now reaching out to OPENAI's Whisper...");
-                let transcription = await withRetry(async () => {
-                    const response = await axios_1.default.post('https://api.openai.com/v1/audio/transcriptions', form, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            ...form.getHeaders(),
-                        },
-                        timeout: 30000
-                    });
-                    console.log("Whisper has answered.");
-                    return response.data.text;
-                }, 3, 10000);
+                const response = await axios_1.default.post('https://api.openai.com/v1/audio/transcriptions', form, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        ...form.getHeaders(),
+                    },
+                    timeout: 30000
+                });
+                console.log("Whisper has answered.");
+                const transcription = response.data.text;
                 console.log('Whisper output:', transcription);
                 let detectedLanguage = 'unknown';
                 try {

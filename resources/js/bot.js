@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalText = btn ? btn.innerHTML : '';
     if (btn) { btn.innerHTML = 'Reconectando...'; btn.disabled = true; }
     try {
-      const res = await fetch(`/whatsapp-manager/integration/v1/instances/${encodeURIComponent(clientId)}/reconnect`, {
+      const res = await fetch(`/whatsapp-manager/manager/integration/${encodeURIComponent(clientId)}/reconnect`, {
         method: 'POST',
         credentials: 'same-origin'
       });
@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const originalText = btn ? btn.innerHTML : '';
     if (btn) { btn.innerHTML = 'Rotando...'; btn.disabled = true; }
     try {
-      const res = await fetch(`/whatsapp-manager/integration/v1/instances/${encodeURIComponent(clientId)}/token/rotate`, {
+      const res = await fetch(`/whatsapp-manager/manager/integration/${encodeURIComponent(clientId)}/token/rotate`, {
         method: 'POST',
         credentials: 'same-origin'
       });

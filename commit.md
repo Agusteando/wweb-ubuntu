@@ -1,1 +1,1 @@
-Resuelve destinatarios LID al JID telefónico antes de enviar archivos
+Evita reenvíos y protege los envíos de la API con idempotencia persistente

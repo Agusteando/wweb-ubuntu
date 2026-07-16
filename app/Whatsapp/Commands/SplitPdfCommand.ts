@@ -6,7 +6,7 @@ import tmp from "tmp";
 import Env from "@ioc:Adonis/Core/Env";
 import * as PDFServicesSdk from "@adobe/pdfservices-node-sdk";
 import { downloadQuotedMediaSafely } from "App/Whatsapp/Utils/QuotedMessage";
-import { requireSentMessageMetadata } from "App/Whatsapp/Utils/SentMessage";
+import { getSentMessageMetadata } from "App/Whatsapp/Utils/SentMessage";
 import { resolveMessageDestination } from "App/Whatsapp/Utils/ChatId";
 
 export default class SplitPdfCommand {
@@ -149,13 +149,16 @@ export default class SplitPdfCommand {
                   sendSeen: false,
                 }
               );
-              const metadata = requireSentMessageMetadata(
-                sentMessage,
-                destination
-              );
-              console.info(
-                `[SplitPdfCommand] Delivered ${filename} to ${destination} as ${metadata.id}.`
-              );
+              const metadata = getSentMessageMetadata(sentMessage, destination);
+              if (metadata.state === "confirmed") {
+                console.info(
+                  `[SplitPdfCommand] Confirmed ${filename} to ${destination} as ${metadata.id}.`
+                );
+              } else {
+                console.info(
+                  `[SplitPdfCommand] Submitted ${filename} to ${destination}; WhatsApp returned no message ID. No retry or resend was performed.`
+                );
+              }
             }
           } catch (error) {
             console.error(
@@ -163,7 +166,7 @@ export default class SplitPdfCommand {
               error
             );
             await message.reply(
-              "Ocurrió un error al dividir el archivo PDF. Por favor, intente nuevamente."
+              "Ocurrió un error al dividir o enviar el archivo PDF. No se realizó ningún reintento ni reenvío automático."
             );
           } finally {
             cleanupCallback();

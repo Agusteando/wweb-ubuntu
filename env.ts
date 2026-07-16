@@ -27,6 +27,9 @@ export default Env.rules({
   // External integration API
   INTEGRATION_ADMIN_TOKEN: Env.schema.string.optional(),
   INTEGRATION_PUBLIC_BASE_URL: Env.schema.string.optional(),
+  API_SEND_TOKEN: Env.schema.string.optional(),
+  API_SEND_DEDUP_WINDOW_MS: Env.schema.string.optional(),
+  API_SEND_IDEMPOTENCY_TTL_MS: Env.schema.string.optional(),
 
   // WhatsApp runtime durability tuning. Defaults are handled in BotService when unset.
   WA_SESSION_BACKUP_RETENTION: Env.schema.string.optional(),
